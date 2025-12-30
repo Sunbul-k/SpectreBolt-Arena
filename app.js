@@ -28,6 +28,11 @@ let player = { x: 400, y: 300, color: 'blue', angle: 0 };
 let bullets = [];
 let enemies={}
 
+let isSprinting = false;
+let sprintCooldown = 0; 
+const SPRINT_SPEED = 550; 
+const NORMAL_SPEED = 300;
+
 const MAP = {
     minX: -2000,
     maxX:  2000,
@@ -44,7 +49,7 @@ const walls = [
 let muzzleFlashTimer = 0;
 
 
-const keys = { w: false, a: false, s: false, d: false };
+const keys = { w: false, a: false, s: false, d: false , shift:false};
 
 // Handle server messages
 socket.on('currentPlayers', (serverPlayers) => {
@@ -97,8 +102,10 @@ socket.on('killEvent', (data) => {
 function drawEnemies() {
     Object.keys(enemies).forEach((id) => {
         let e = enemies[id];
+        if (e.lives <= 0) return;
         contx.save();
         contx.translate(e.x, e.y);
+
         contx.fillStyle = "white";
         contx.textAlign = "center";
         contx.font = "14px Arial";
@@ -113,10 +120,10 @@ function drawEnemies() {
     });
 }
 
-
 // Key Listeners
 window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
+    if (e.key === 'Shift') keys.shift = true;
     if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight", " "].indexOf(e.key) > -1) {
         e.preventDefault();
     }
@@ -133,7 +140,7 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
     const key = e.key.toLowerCase();
-    
+    if (e.key === 'Shift') keys.shift = false;
     // WASD
     if (keys.hasOwnProperty(key)) keys[key] = false;
     
@@ -170,24 +177,46 @@ window.addEventListener('mousedown', (e) => {
 // Movement Function
 
 function handle_movement(deltaTime) {
-    let oldX=player.x
-    let oldY=player.y
-    const speed = 300; //pixels per sec
-    if (keys.w) player.y -= speed*deltaTime;
-    if (keys.s) player.y += speed*deltaTime;
-    if (keys.a) player.x -= speed*deltaTime;
-    if (keys.d) player.x += speed*deltaTime; 
+    let oldX = player.x;
+    let oldY = player.y;
+    
+    // Manage Sprint Logic
+    if (keys.shift && sprintCooldown <= 0) {
+        isSprinting = true;
+        currentSpeed = SPRINT_SPEED;
+    } else {
+        isSprinting = false;
+        currentSpeed = NORMAL_SPEED;
+        
+        // Recover cooldown slowly if not sprinting
+        if (sprintCooldown > 0) sprintCooldown -= deltaTime;
+    }
 
-    if(collidesWithWall(player.x,player.y)){
-        player.x=oldX
-        player.y=oldY
+    if (isSprinting && (keys.w || keys.a || keys.s || keys.d)) {
+        sprintCooldown += deltaTime * 2; 
+        if (sprintCooldown > 3) sprintCooldown = 5; 
+    }
+
+    if (keys.w) player.y -= currentSpeed * deltaTime;
+    if (keys.s) player.y += currentSpeed * deltaTime;
+    if (keys.a) player.x -= currentSpeed * deltaTime;
+    if (keys.d) player.x += currentSpeed * deltaTime; 
+
+    if (collidesWithWall(player.x, player.y)) {
+        player.x = oldX;
+        player.y = oldY;
     }
 
     if (keys.w || keys.a || keys.s || keys.d) {
         socket.emit('move', { x: player.x, y: player.y, angle: player.angle });
     }
-    player.x = Math.max(MAP.minX, Math.min(MAP.maxX, player.x));
-    player.y = Math.max(MAP.minY, Math.min(MAP.maxY, player.y));
+}
+
+function updateSprintUI() {
+    // Calculate percentage
+    const sprintPercent = Math.max(0, 100 - (sprintCooldown / 5 * 100));
+    document.getElementById('sprintBar').style.width = sprintPercent + "%";
+    document.getElementById('sprintBar').style.background = sprintCooldown > 3 ? "red" : "#00e1ff";
 }
 
 let lastshot=0;
@@ -210,16 +239,43 @@ function shoot() {
     socket.emit('shoot', bulletData);
 }
 
-// Updated Leaderboard UI in app.js to show scores
 function updateLeaderboardUI() {
-    document.getElementById('healthVal').innerText = player.health || 100;
+    // Update individual HUD elements
+    document.getElementById('healthVal').innerText = player.health !== undefined ? player.health : 100;
+    document.getElementById('livesVal').innerText = player.lives !== undefined ? player.lives : 3;
     
-    let scoreText = `Scores: ${myName} (${player.score || 0})`;
-    Object.keys(enemies).forEach(id => {
-        let name = enemies[id].name || "Enemy";
-        scoreText += ` | ${name} (${enemies[id].score || 0})`;
+    // Create a list of all participants (Player + Enemies)
+    let allParticipants = [];
+    
+    // Add yourself to the list
+    allParticipants.push({
+        name: myName + " (You)",
+        score: player.score || 0,
+        isMe: true
     });
-    document.getElementById('leaderboard').innerText = scoreText;
+    
+    // Add all enemies to the list
+    Object.values(enemies).forEach(e => {
+        allParticipants.push({
+            name: e.name || "Enemy",
+            score: e.score || 0,
+            isMe: false
+        });
+    });
+
+    // Sort the list from highest score to lowest
+    allParticipants.sort((a, b) => b.score - a.score);
+
+    // Generate HTML for vertical display
+    let leaderHTML = "<strong>RANKINGS</strong><br>";
+    allParticipants.forEach((p, index) => {
+        const color = p.isMe ? "#00ff44" : "white"; // Highlight user in green
+        leaderHTML += `<div style="color: ${color}; margin-top: 3px;">
+            ${index + 1}. ${p.name}: ${p.score}
+        </div>`;
+    });
+
+    document.getElementById('leaderboard').innerHTML = leaderHTML;
 }
 
 function updateBullets(deltaTime) {
@@ -285,14 +341,26 @@ function updateBullets(deltaTime) {
     }
 }
 
+socket.on('respawn', (coords) => {
+    player.x = coords.x;
+    player.y = coords.y;
+    console.log(`Back to base!`);
+});
+
 socket.on('updateStats', (data) => {
     if (data.id === socket.id) {
         player.health = data.health;
+        player.lives = data.lives;
+        player.score = data.score; 
     } else if (enemies[data.id]) {
         enemies[data.id].health = data.health;
+        enemies[data.id].lives = data.lives;
+        // Update enemy score
+        if (data.shooterId && enemies[data.shooterId]) {
+            enemies[data.shooterId].score = data.score;
+        }
     }
-    // Update Leaderboard UI
-    updateLeaderboardUI();
+    updateLeaderboardUI(); // This triggers the visual refresh
 });
 
 socket.on('gameOver', (data) => {
@@ -308,10 +376,32 @@ socket.on('gameOver', (data) => {
         screen.style.display = 'none';
     }, 5000);
 });
+
+socket.on('timerUpdate', (timeLeft) => {
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
+    const timeString = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    document.getElementById('matchTimer').innerText = timeString;
+});
+
 let bots = {};
 
 socket.on('botUpdate', (serverBots) => {
     bots = serverBots;
+});
+
+socket.on('currentPlayers', (serverPlayers) => {
+    Object.keys(serverPlayers).forEach((id) => {
+        if (id !== socket.id) {
+            enemies[id] = serverPlayers[id];
+        } else {
+            // Update local player data with what the server has
+            player.score = serverPlayers[id].score;
+            player.health = serverPlayers[id].health;
+            player.lives = serverPlayers[id].lives;
+        }
+    });
+    updateLeaderboardUI(); 
 });
 
 // Makes bots figure
@@ -321,6 +411,13 @@ function drawBots() {
         let b = bots[id];
         contx.save();
         contx.translate(b.x, b.y);
+
+        // Bot Health Bar
+        contx.fillStyle = "red";
+        contx.fillRect(-20, -35, 40, 5);
+        contx.fillStyle = "#00ff00";
+        contx.fillRect(-20, -35, 40 * (b.health / 100), 5);
+
         contx.rotate(b.angle);
         contx.fillStyle = 'green'; 
         contx.beginPath();
@@ -331,6 +428,7 @@ function drawBots() {
     });
 }
 function drawPlayer() {
+    if (player.lives <= 0) return;
     contx.save();
     contx.translate(player.x, player.y);
     contx.fillStyle = "white";
@@ -430,6 +528,8 @@ function gameLoop(currentTime) {
     drawEnemies();
     drawPlayer();
     drawBots()
+
+    updateSprintUI()
 
     // Restore the state so the UI doesn't slide away
     contx.restore();

@@ -18,6 +18,14 @@ A real-time 1v1 multiplayer 2D sniper game built with **Node.js**, **Socket.io**
 ## Why I made this
 My little eight-year-old brother requested me to make him a shooter game that is battle royale-lite so I figured why not? Since he plays roblox on his laptop a lot, him replacing it with this is a dream of mine so that he still has fun without the safety risks.
 
+## How to Run Locally:
+
+### Step 1: Clone the repo:
+```bash
+git clone https://github.com/saifkayyali3/SniArena.git
+cd SniArena
+```
+
 ## License
 This project is licensed under the **GNU GPLv3** - see the [License](LICENSE) file for details.
 
