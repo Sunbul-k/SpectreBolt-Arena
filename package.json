@@ -1,0 +1,38 @@
+{
+  "name": "sniarena",
+  "version": "1.0.0",
+  "description": "A 1v1 2D shooter game using JS",
+  "keywords": [
+    "shooter",
+    "2D",
+    "2D",
+    "game",
+    "sniping",
+    "2D",
+    "shooter",
+    "2d",
+    "shooter",
+    "shooter",
+    "game"
+  ],
+  "homepage": "https://github.com/saifkayyali3/SniArena#readme",
+  "bugs": {
+    "url": "https://github.com/saifkayyali3/SniArena/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/saifkayyali3/SniArena.git"
+  },
+  "license": "GPL-3.0",
+  "author": "Saif Kayyali",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "test": "npm start",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  }
+}

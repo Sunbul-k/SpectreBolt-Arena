@@ -1,43 +1,21 @@
 <!DOCTYPE html>
 <html>
+<head>
+    <title>SniArena</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="author" content="Saif Kayyali">
+    <style>
+        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: #222; }
+        canvas { background: #eee; border: 2px solid #555; }
+    </style>
+</head>
 <body>
-    <canvas id="game" width="800" height="600" style="background: #eee;"></canvas>
-    <script>
-        const canvas = document.getElementById('game');
-        const ctx = canvas.getContext('2d');
-
-        let player = { x: 400, y: 300, color: 'blue', speed: 5, angle: 0 };
-        let bullets = [];
-
-        // Aiming Logic (The "Eye Tracker")
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            let dx = e.clientX - rect.left - player.x;
-            let dy = e.clientY - rect.top - player.y;
-            player.angle = Math.atan2(dy, dx); 
-        });
-
-        function update() {
-            // Clear screen
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Draw Player (Circle)
-            ctx.save();
-            ctx.translate(player.x, player.y);
-            ctx.rotate(player.angle); // Rotate to face mouse
-            ctx.fillStyle = player.color;
-            ctx.beginPath();
-            ctx.arc(0, 0, 20, 0, Math.PI * 2);
-            ctx.fill();
-            // Draw a small line to show where the gun is pointing
-            ctx.fillRect(0, -2, 30, 4); 
-            ctx.restore();
-
-            requestAnimationFrame(update);
-        }
-        update();
-    </script>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
-    <script src="/socket.io/socket.io.js"></script> <script src="app.js"></script>
+    <div id="ui" style="position: absolute; top: 10px; left: 10px; color: white; font-family: sans-serif; pointer-events: none;">
+        <div>Health: <span id="healthVal">100</span>%</div>
+        <div id="leaderboard">Scores: </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
