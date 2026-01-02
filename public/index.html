@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SpectreBolt Arena</title>
+    <style>
+        :root {
+            --ui-bg: rgba(0, 0, 0, 0.7);
+            --accent: #0f4;
+            --sprint: #0cf;
+        }
+
+        body { 
+            margin: 0; overflow: hidden; background: #111; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            touch-action: none; user-select: none; -webkit-user-select: none;
+        }
+
+        canvas { display: block; }
+
+        /* Screens */
+        #nameScreen, #gameOver {
+            position: fixed; inset: 0; background: #222; z-index: 1000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+
+        #nameScreen h1 { color: white; font-size: 56px; margin-bottom: 30px; letter-spacing: 5px; }
+        #nameScreen input { 
+            padding: 15px; font-size: 20px; border-radius: 5px; border: none; 
+            width: 280px; text-align: center; outline: none;
+        }
+        #nameScreen button, #gameOver button { 
+            margin-top: 25px; padding: 15px 50px; font-size: 22px; 
+            background: var(--accent); border: none; cursor: pointer; 
+            font-weight: bold; border-radius: 5px; transition: transform 0.1s;
+        }
+
+        /* HUD Elements */
+        #ui, #leaderboard {
+            position: fixed; top: 15px; color: white;
+            background: var(--ui-bg); padding: 15px; border-radius: 10px; 
+            pointer-events: none; z-index: 10; font-size: 14px;
+        }
+        #ui { left: 15px; min-width: 160px; }
+        #leaderboard { right: 15px; text-align: right; min-width: 140px; }
+
+        .bar-bg { width: 100%; height: 8px; background: #333; border-radius: 4px; overflow: hidden; margin-top: 5px; }
+        #staminaBar { width: 100%; height: 100%; background: var(--sprint); transition: width 0.1s; }
+        #timer { font-size: 22px; font-weight: bold; color: var(--accent); margin-bottom: 8px; }
+
+        /* Mobile Controls */
+        #mobileControls {
+            display: none; position: fixed; inset: 0; z-index: 500; pointer-events: none;
+        }
+        @media (pointer: coarse) { #mobileControls { display: block; } }
+
+        .joystick-base {
+            position: absolute; bottom: 60px; left: 60px; width: 140px; height: 140px;
+            background: rgba(255,255,255,0.1); border-radius: 50%; pointer-events: auto;
+        }
+        .joystick-knob {
+            position: absolute; top: 45px; left: 45px; width: 50px; height: 50px;
+            background: rgba(255,255,255,0.4); border-radius: 50%;
+        }
+
+        .action-btn {
+            position: absolute; border-radius: 50%; display: flex; align-items: center; 
+            justify-content: center; color: white; font-weight: bold; pointer-events: auto;
+        }
+        #shootBtn {
+            bottom: 70px; right: 70px; width: 100px; height: 100px;
+            background: rgba(255, 50, 50, 0.6); border: 4px solid rgba(255,255,255,0.2);
+        }
+        #sprintBtn {
+            bottom: 180px; right: 60px; width: 65px; height: 65px;
+            background: rgba(0, 150, 255, 0.6); border: 3px solid rgba(255,255,255,0.2);
+            font-size: 12px;
+        }
+        /* Minimap Styles */
+        #minimap-container {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 180px;
+            height: 180px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #555;
+            border-radius: 8px;
+            overflow: hidden;
+            z-index: 5;
+        }
+
+        #minimap-canvas {
+            display: block;
+        }
+
+        /* Mobile Toggle Button */
+        #mapToggle {
+            display: none;
+            position: fixed;
+            bottom: 210px;
+            left: 20px;
+            padding: 8px 12px;
+            background: var(--ui-bg);
+            color: white;
+            border: 1px solid #555;
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: auto;
+            z-index: 10;
+        }
+
+        /* Show toggle only on mobile/tablets */
+        @media (pointer: coarse) {
+            #mapToggle { display: block; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="nameScreen">
+        <h1>SpectreBolt Arena</h1>
+        <input type="text" id="nameInput" placeholder="NICKNAME" maxlength="12">
+        <button id="startBtn">JOIN ARENA</button>
+    </div>
+
+    <div id="gameOver" style="display:none;">
+        <h1 style="color: var(--accent);">ARENA CLOSED</h1>
+        <div id="winnerList" style="font-size: 24px; text-align: center; color: white;"></div>
+        <button onclick="location.reload()">REMATCH</button>
+    </div>
+    <button id="mapToggle">HIDE MAP</button>
+    <div id="minimap-container">
+        <canvas id="minimap-canvas" width="180" height="180"></canvas>
+    </div>
+    <div id="ui">
+        <div id="timer">TIME: 20:00</div>
+        <div>HP: <span id="hpText">100</span> | Lives: <span id="livesText">3</span></div>
+        <div class="bar-bg"><div id="staminaBar"></div></div>
+    </div>
+
+    <div id="leaderboard">
+        <div style="border-bottom: 1px solid #555; margin-bottom: 5px; padding-bottom: 2px;"><b>LEADERBOARD</b></div>
+        <div id="scoreList"></div>
+    </div>
+
+    <div id="mobileControls">
+        <div id="moveJoystick" class="joystick-base">
+            <div id="moveKnob" class="joystick-knob"></div>
+        </div>
+        <div id="shootBtn" class="action-btn">FIRE</div>
+        <div id="sprintBtn" class="action-btn">RUN</div>
+    </div>
+
+    <canvas id="game"></canvas>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        
+        let myId, mapSize, walls = [];
+        let players = {}, bots = {}, bullets = {}, matchTimer = 1200;
+        let keys = {};
+        let mouseAngle = 0;
+        let isMobileSprinting = false;
+        let joy = { active: false, x: 0, y: 0 };
+        let camX=0; let camY=0;
+
+        /* Initialization */
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+        window.dispatchEvent(new Event('resize'));
+        
+        document.getElementById('startBtn').onclick = () => {
+            const name = document.getElementById('nameInput').value;
+            if (name.length > 14) {
+                alert("Name too long!");
+                return;
+            }
+            socket.emit('joinGame', { name: name || "Sniper" });
+            document.getElementById('nameScreen').style.display = 'none';
+        };
+
+        // Input Listeners
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+        window.addEventListener('mousemove', e => {
+            if (!joy.active) {
+                mouseAngle = Math.atan2(e.clientY - canvas.height/2, e.clientX - canvas.width/2);
+            }
+        });
+        window.addEventListener('mousedown', () => {
+            if (players[myId] && !players[myId].isSpectating) socket.emit('fire', { angle: mouseAngle });
+        });
+
+        // Mobile Joystick and Buttons
+        const joyBase = document.getElementById('moveJoystick');
+        const joyKnob = document.getElementById('moveKnob');
+
+        const updateJoystick = (e) => {
+            const touch = e.touches[0];
+            const rect = joyBase.getBoundingClientRect();
+            const centerX = rect.left + rect.width/2;
+            const centerY = rect.top + rect.height/2;
+            let dx = touch.clientX - centerX;
+            let dy = touch.clientY - centerY;
+            const dist = Math.min(50, Math.hypot(dx, dy));
+            const angle = Math.atan2(dy, dx);
+            
+            joy.x = (Math.cos(angle) * dist) / 50;
+            joy.y = (Math.sin(angle) * dist) / 50;
+            joy.active = true;
+            mouseAngle = angle; // Aim in movement direction
+
+            joyKnob.style.transform = `translate(${joy.x * 45}px, ${joy.y * 45}px)`;
+        };
+
+        joyBase.addEventListener('touchstart', e => { e.preventDefault(); updateJoystick(e); });
+        joyBase.addEventListener('touchmove', e => { e.preventDefault(); updateJoystick(e); });
+        joyBase.addEventListener('touchend', () => {
+            joy.active = false; joy.x = 0; joy.y = 0;
+            joyKnob.style.transform = `translate(0,0)`;
+        });
+
+        document.getElementById('shootBtn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (players[myId] && !players[myId].isSpectating) socket.emit('fire', { angle: mouseAngle });
+        });
+
+        document.getElementById('sprintBtn').addEventListener('touchstart', (e) => { e.preventDefault(); isMobileSprinting = true; });
+        document.getElementById('sprintBtn').addEventListener('touchend', (e) => { e.preventDefault(); isMobileSprinting = false; });
+
+        // Networking
+        socket.on('init', d => { myId = d.id; mapSize = d.mapSize; walls = d.walls; });
+        socket.on('state', s => { 
+            players = s.players; bots = s.bots; bullets = s.bullets; matchTimer = s.matchTimer;
+        });
+        socket.on('respawned', (data)=>{
+            camX = data.x;
+            camY=data.y;
+
+        })
+        socket.on('errorMsg', (msg) => {
+            alert(msg);
+            document.getElementById('nameScreen').style.display = 'flex';
+        });
+        socket.on('matchReset', ()=>{
+            document.getElementById('gameOver').style.display='none';
+        })
+
+        // Game Loop
+        setInterval(() => {
+            const me = players[myId];
+            if (!me || matchTimer <= 0) return;
+
+            const isSprinting = keys['ShiftLeft'] || keys['ShiftRight'] || isMobileSprinting;
+            let speed = me.isSpectating ? 8.0 : ((isSprinting && me.stamina > 5) ? 9.2 : 5.8);
+            
+            let dx = 0, dy = 0;
+            if (keys['KeyW'] || keys['ArrowUp']) dy -= speed;
+            if (keys['KeyS'] || keys['ArrowDown']) dy += speed;
+            if (keys['KeyA'] || keys['ArrowLeft']) dx -= speed;
+            if (keys['KeyD'] || keys['ArrowRight']) dx += speed;
+
+            if (joy.active) {
+                dx = joy.x * speed;
+                dy = joy.y * speed;
+            }
+
+            let currentStamina = me.stamina;
+            if (!me.isSpectating && (dx !== 0 || dy !== 0) && isSprinting) {
+                currentStamina = Math.max(0, currentStamina - 1.5);
+            }
+
+            if (dx !== 0 || dy !== 0 || me.angle !== mouseAngle) {
+                socket.emit('update', { x: me.x + dx, y: me.y + dy, angle: mouseAngle, stamina: currentStamina });
+            }
+        }, 1000/60);
+
+        // Rendering
+        function drawEntity(p, color, label, isMe, isBot) {
+            ctx.save();
+            if (p.isSpectating) ctx.globalAlpha = 0.5;
+            ctx.translate(p.x, p.y);
+
+            if (p.spawnProtected && !p.isSpectating) {
+                ctx.beginPath();
+                ctx.arc(0, 0, 28, 0, Math.PI * 2);
+                ctx.strokeStyle = "#0cf"; // Cyan shield color
+                ctx.lineWidth = 3;
+                ctx.setLineDash([5, 5]); // Dashed line for "active" look
+                ctx.stroke();
+                ctx.setLineDash([]); // Reset dash
+            }
+            // Health Bar
+            if (!p.isSpectating) {
+                ctx.fillStyle = "#333"; ctx.fillRect(-20, -45, 40, 6);
+                ctx.fillStyle = p.hp > 30 ? "#0f4" : "#f22";
+                ctx.fillRect(-20, -45, (p.hp/100) * 40, 6);
+            }
+
+            // Gun
+            ctx.save();
+            ctx.rotate(p.angle);
+            ctx.fillStyle = color; ctx.strokeStyle = "#000"; ctx.lineWidth = 3;
+            ctx.fillRect(0, -6, 32, 12); ctx.strokeRect(0, -6, 32, 12);
+            ctx.restore();
+
+            // Body
+            ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI*2);
+            ctx.fillStyle = color; ctx.fill();
+            ctx.strokeStyle = isMe ? "#fff" : "#000"; ctx.lineWidth = isMe ? 4 : 3;
+            ctx.stroke();
+
+            // Name
+            ctx.fillStyle = "white"; ctx.globalAlpha = 1; ctx.font = "bold 14px Arial"; ctx.textAlign = "center";
+            ctx.fillText((p.isSpectating ? "[GHOST] " : "") + label, 0, -55);
+            ctx.restore();
+        }
+const miniCanvas = document.getElementById('minimap-canvas');
+const miniCtx = miniCanvas.getContext('2d');
+const mapToggle = document.getElementById('mapToggle');
+const miniContainer = document.getElementById('minimap-container');
+
+// Toggle logic for mobile
+mapToggle.onclick = () => {
+    if (miniContainer.style.display === 'none') {
+        miniContainer.style.display = 'block';
+        mapToggle.innerText = 'HIDE MAP';
+    } else {
+        miniContainer.style.display = 'none';
+        mapToggle.innerText = 'SHOW MAP';
+    }
+};
+
+function drawMinimap() {
+    miniCtx.clearRect(0, 0, miniCanvas.width, miniCanvas.height);
+    const scale = miniCanvas.width / mapSize;
+
+    // Draw Walls on Minimap
+    miniCtx.fillStyle = "#444";
+    walls.forEach(w => {
+        miniCtx.fillRect(w.x * scale, w.y * scale, w.w * scale, w.h * scale);
+    });
+
+    // Draw Bots (Red dots)
+    Object.values(bots).forEach(b => {
+        miniCtx.fillStyle = "red";
+        miniCtx.beginPath();
+        miniCtx.arc(b.x * scale, b.y * scale, 3, 0, Math.PI * 2);
+        miniCtx.fill();
+    });
+
+    // Draw Other Players (White dots)
+    Object.values(players).forEach(p => {
+        if (p.id !== myId) {
+            miniCtx.fillStyle = p.isSpectating ? "rgba(255,255,255,0.3)" : "white";
+            miniCtx.beginPath();
+            miniCtx.arc(p.x * scale, p.y * scale, 2, 0, Math.PI * 2);
+            miniCtx.fill();
+        }
+    });
+
+    // Draw Me (Your accent color dot)
+    const me = players[myId];
+    if (me) {
+        miniCtx.fillStyle = "#0f4"; // Bright green for you
+        miniCtx.beginPath();
+        miniCtx.arc(me.x * scale, me.y * scale, 4, 0, Math.PI * 2);
+        miniCtx.fill();
+        // Little border to make you stand out
+        miniCtx.strokeStyle = "white";
+        miniCtx.lineWidth = 1;
+        miniCtx.stroke();
+    }
+}
+        function draw() {
+            ctx.fillStyle = "#111"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const me = players[myId];
+            if (!me) { requestAnimationFrame(draw); return; }
+
+            ctx.save();
+            ctx.translate(canvas.width/2 - me.x, canvas.height/2 - me.y);
+            
+            camX+=(me.x-camX)*0.15;
+            camY+=(me.y-camY)*0.15;
+
+            // Floor
+            ctx.fillStyle = "#006666"; ctx.fillRect(0, 0, mapSize, mapSize);
+            ctx.strokeStyle = "rgba(0,0,0,0.2)";
+            for(let i=0; i<=mapSize; i+=100) {
+                ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,mapSize); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(mapSize,i); ctx.stroke();
+            }
+
+            walls.forEach(w => {
+                ctx.fillStyle = "#333"; ctx.fillRect(w.x, w.y, w.w, w.h);
+                ctx.strokeStyle = "#000"; ctx.lineWidth = 4; ctx.strokeRect(w.x, w.y, w.w, w.h);
+            });
+
+            Object.values(bullets).forEach(b => {
+                ctx.fillStyle = "yellow"; ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, Math.PI*2); ctx.fill();
+            });
+
+            Object.values(bots).forEach(b => drawEntity(b, b.color, b.name, false, true));
+            Object.values(players).forEach(p => { if(!p.isSpectating || p.id !== myId) drawEntity(p, p.color, p.name, p.id === myId, false); });
+            
+            
+            drawEntity(me, me.color, me.name, true, false);
+
+            ctx.restore();
+
+            // HUD
+            document.getElementById('hpText').innerText = Math.ceil(me.hp);
+            document.getElementById('livesText').innerText = me.lives;
+            document.getElementById('staminaBar').style.width = me.stamina + "%";
+            const mins = Math.floor(matchTimer / 60);
+            const secs = Math.floor(matchTimer % 60).toString().padStart(2, '0');
+            document.getElementById('timer').innerText = `TIME: ${mins}:${secs}`;
+            
+            const all = [...Object.values(players), ...Object.values(bots)].sort((a,b) => b.score - a.score).slice(0,5);
+            document.getElementById('scoreList').innerHTML = all.map(p => `<div>${p.name}: ${p.score}</div>`).join('');
+
+            if (matchTimer <= 0) {
+                document.getElementById('gameOver').style.display = 'flex';
+                const high = Math.max(...[...Object.values(players), ...Object.values(bots)].map(e => e.score));
+                const winners = [...Object.values(players), ...Object.values(bots)].filter(e => e.score === high);
+                document.getElementById('winnerList').innerHTML = `High Score: ${high}<br>` + winners.map(w => w.name).join(', ');
+                return;
+            }
+            drawMinimap()
+            requestAnimationFrame(draw);
+        }
+        draw();
+    </script>
+</body>
+</html>

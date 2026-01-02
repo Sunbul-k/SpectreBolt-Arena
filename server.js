@@ -1,202 +1,294 @@
 /*
- * SniArena - 1v1 Sniper Game
- * Copyright (C) 2025 Saif Kayyali
- * Licensed under GNU GPLv3
+ * SpectreBolt Arena - Multiplayer 2D Shooter Game Server-Side
+ * Copyright (C) 2026 Saif Kayyali
+ * GNU GPLv3
  */
 
 const express = require('express');
-const app = express();
-const http = require('http').Server(app);
-const io = require('socket.io')(http);
+const http = require('http');
 const path = require('path');
+const { Server } = require('socket.io');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
+app.use(express.static(path.join(__dirname, 'public')));
 
-app.use(express.static(__dirname));
+/* ================= CONSTANTS ================= */
+const MAP_SIZE = 2000;
+const TICK_RATE = 1000 / 30;
+const PLAYER_RADIUS = 20;
+const MAX_ATTEMPTS = 5;
+const BASE_SPEED = 5.8;
+const SPRINT_SPEED = 9.2;
 
+/* ================= STATE ================= */
 let players = {};
+let nameAttempts = {};
 let bots = {};
-let botLastShot = {}; // To prevent bots from firing too fast
-let matchTime = 15 * 60; // 15 minutes in seconds
+let bullets = {};
+let bulletIdCounter = 0;
+let matchTimer = 20 * 60;
+let walls = generateWalls(12);
 
-const walls = [
-    { x: -500, y: -200, w: 300, h: 40 },
-    { x: 200, y: 300, w: 40, h: 300 },
-    { x: -1000, y: 600, w: 600, h: 40 }
-];
+/* ================= HELPERS ================= */
+const BANNED_WORDS = ['fuck', 'nigger', 'nigga', 'bitch', 'slut', 'nazi', 'hitler', 'milf', 'cunt', 'retard', 'ass', 'dick'];
 
-function collidesWithWall(x, y, radius = 20) {
-    return walls.some(w =>
-        x + radius > w.x &&
-        x - radius < w.x + w.w &&
-        y + radius > w.y &&
-        y - radius < w.y + w.h
-    );
+function cleanUsername(name) {
+    if (!name || name.trim().length === 0) return "Sniper";
+    let sanitized = name.trim().slice(0, 14);
+    const leetMap = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '@': 'a', '$': 's', '!': 'i', '-': '', '_': '' };
+    const normalized = sanitized.toLowerCase().replace(/[0134578@$!]/g, c => leetMap[c]);
+    if (BANNED_WORDS.some(word => normalized.includes(word))) {
+        return 'Spectre' + Math.floor(1000 + Math.random() * 9000);
+    }
+    return sanitized;
 }
 
-io.on('connection', (socket) => {
-    console.log('A sniper has entered the arena!');
+function rectsIntersect(r1, r2, padding = 0) {
+    return (r1.x < r2.x + r2.w + padding && r1.x + r1.w + padding > r2.x &&
+            r1.y < r2.y + r2.h + padding && r1.y + r1.h + padding > r2.y);
+}
 
-    socket.on('joinGame', (data) => {
-        players[socket.id] = { 
-            x: 0, 
-            y: 0, 
-            angle: 0, 
-            color: Object.keys(players).length === 0 ? 'blue' : 'red',
-            health: 100,
-            score: 0,
-            lives: 3, 
-            name: data.name || "Player"
-        };
-        socket.emit('currentPlayers', players);
-        socket.emit('botUpdate', bots);
-        socket.broadcast.emit('newPlayer', { id: socket.id, playerInfo: players[socket.id] });
-    }); 
+function generateWalls(count) {
+    const newWalls = [];
+    const MIN_CORRIDOR_WIDTH = 120;
+    const MARGIN = 100;
+    let attempts = 0;
+    while (newWalls.length < count && attempts < 500) {
+        attempts++;
+        const w = 150 + Math.random() * 200;
+        const h = 150 + Math.random() * 200;
+        const x = MARGIN + Math.random() * (MAP_SIZE - w - MARGIN * 2);
+        const y = MARGIN + Math.random() * (MAP_SIZE - h - MARGIN * 2);
+        const candidate = { x, y, w, h };
+        if (!newWalls.some(existing => rectsIntersect(candidate, existing, MIN_CORRIDOR_WIDTH))) {
+            newWalls.push(candidate);
+        }
+    }
+    return newWalls;
+}
 
-    socket.on('move', (movementData) => {
-        if (players[socket.id] && players[socket.id].lives > 0) {
-            players[socket.id].x = movementData.x;
-            players[socket.id].y = movementData.y;
-            players[socket.id].angle = movementData.angle;
-            socket.broadcast.emit('enemyMoved', { 
-                id: socket.id, x: movementData.x, y: movementData.y, angle: movementData.angle 
+function collidesWithWall(x, y, r = PLAYER_RADIUS) {
+    if (x < r || y < r || x > MAP_SIZE - r || y > MAP_SIZE - r) return true;
+    return walls.some(w => x + r > w.x && x - r < w.x + w.w && y + r > w.y && y - r < w.y + w.h);
+}
+
+function getSafeSpawn() {
+    let x, y, attempts = 0;
+    const SPAWN_BUFFER = 50;
+    do {
+        x = SPAWN_BUFFER + Math.random() * (MAP_SIZE - SPAWN_BUFFER * 2);
+        y = SPAWN_BUFFER + Math.random() * (MAP_SIZE - SPAWN_BUFFER * 2);
+        attempts++;
+    } while (collidesWithWall(x, y, SPAWN_BUFFER) && attempts < 100);
+    return { x, y };
+}
+function activateShield(player) {
+    player.spawnProtected = true;
+    setTimeout(() => {
+        if (players[player.id]) {
+            players[player.id].spawnProtected = false;
+        }
+    }, 3000); // 3 seconds
+}
+
+function handleSuccessfulJoin(socket, name) {
+    if (matchTimer <= 0) resetMatch();
+    const pos = getSafeSpawn();
+    players[socket.id] = {
+        id: socket.id,
+        name: name,
+        x: pos.x, y: pos.y, hp: 100, lives: 3, score: 0, stamina: 100,
+        angle: 0, color: `hsl(${Math.random() * 360},70%,50%)`,
+        isSpectating: false, 
+        spawnProtected:true,
+        lastRegenTime: Date.now(),
+        lastUpdateTime: Date.now()
+    };
+    activateShield(players[socket.id]); 
+    socket.emit('init', { id: socket.id, mapSize: MAP_SIZE, walls });
+}
+
+function resetMatch() {
+    console.log("Match resetting...");
+    matchTimer = 20 * 60;
+    bullets = {};
+    walls = generateWalls(12);
+    Object.values(players).forEach(p => {
+        const pos = getSafeSpawn();
+        Object.assign(p, { x: pos.x, y: pos.y, hp: 100, lives: 3, score: 0, isSpectating: false });
+    });
+    Object.values(bots).forEach(b => {
+        const pos = getSafeSpawn();
+        Object.assign(b, { x: pos.x, y: pos.y, hp: 100, score: 0 });
+    });
+    io.emit('init', { id: null, mapSize: MAP_SIZE, walls });
+    io.emit('matchReset');
+}
+
+/* ================= BOT CLASS ================= */
+class Bot {
+    constructor(id, name, color, speed, bulletSpeed) {
+        this.id = id; this.name = name; this.color = color;
+        this.speed = speed; this.bulletSpeed = bulletSpeed;
+        const pos = getSafeSpawn();
+        this.x = pos.x; this.y = pos.y; this.hp = 100; this.score = 0; this.angle = 0;
+        this.wanderAngle = Math.random() * Math.PI * 2;
+        this.lastFireTime = 0; this.lastRegenTime = Date.now();
+    }
+    update(players) {
+        if (Date.now() - this.lastRegenTime > 3000) {
+            this.hp = Math.min(100, this.hp + 5);
+            this.lastRegenTime = Date.now();
+        }
+        this.wanderAngle += (Math.random() - 0.5) * 0.2;
+        let nx = this.x + Math.cos(this.wanderAngle) * this.speed;
+        let ny = this.y + Math.sin(this.wanderAngle) * this.speed;
+        if (!collidesWithWall(nx, ny, 18)) { this.x = nx; this.y = ny; } 
+        else { this.wanderAngle += Math.PI; }
+
+        const targets = Object.values(players).filter(p => !p.isSpectating);
+        if (targets.length) {
+            let nearest = targets[0], minDist = Math.hypot(nearest.x - this.x, nearest.y - this.y);
+            targets.forEach(t => {
+                let d = Math.hypot(t.x - this.x, t.y - this.y);
+                if (d < minDist) { minDist = d; nearest = t; }
             });
-        }
-    });
-
-    socket.on('shoot', (bulletData) => {
-        if (players[socket.id] && players[socket.id].lives > 0) {
-            socket.broadcast.emit('enemyShoot', bulletData);
-        }
-    });
-
-    socket.on('playerHit', (targetId) => {
-        let shooter = players[socket.id];
-        let target = players[targetId] || bots[targetId];
-
-        if (shooter && target && (target.lives > 0 || bots[targetId])) {
-            let damage = bots[targetId] ? 15 : 10;
-            target.health -= damage;
-            
-            if (target.health <= 0) {
-                target.health = 0;
-                shooter.score += 1;
-                io.emit('killEvent', { killer: shooter.name, victim: target.name });
-
-                if (bots[targetId]) {
-                    bots[targetId].health = 100;
-                    bots[targetId].x = 0; 
-                    bots[targetId].y = 0;
-                } else {
-                    target.lives -= 1;
-                    if (target.lives > 0) {
-                        target.health = 100;
-                        target.x = 0;
-                        target.y = 0;
-                        io.to(targetId).emit('respawn', { x: 0, y: 0 });
-                    } else {
-                        io.to(targetId).emit('gameOver', { 
-                            message: "OUT OF LIVES - SPECTATING", 
-                            winnerColor: "red" 
-                        });
-                    }
-                }
+            this.angle = Math.atan2(nearest.y - this.y, nearest.x - this.x);
+            if (minDist < 600 && Date.now() - this.lastFireTime > 1500) {
+                const bid = 'bot_b' + (++bulletIdCounter);
+                bullets[bid] = { id: bid, x: this.x, y: this.y, angle: this.angle, owner: this.id, speed: this.bulletSpeed / 30 };
+                this.lastFireTime = Date.now();
             }
-            io.emit('updateStats', {
-                id: targetId,
-                health: target.health,
-                lives: target.lives, 
-                shooterId: socket.id,
-                score: shooter.score
-            });
         }
+    }
+}
+
+// Initializing the Bot Roster
+bots['bot_bobby'] = new Bot('bot_bobby', 'Bobby', '#8A9A5B', 1.5, 650);
+//bots['bot_rob'] = new Bot('bot_rob', 'Rob', '#4A90E2', 6.0, 700); 
+//bots['bot_eliminator'] = new Bot('bot_eliminator', 'Eliminator', '#E24A4A', 9.0, 700);
+
+/* ================= SOCKETS ================= */
+io.on('connection', socket => {
+    socket.on('joinGame', (data) => {
+        const rawName = data.name || "";
+        const cleanedName = cleanUsername(rawName);
+        
+        if (cleanedName.startsWith('Spectre') && cleanedName !== rawName && rawName !== "") {
+            nameAttempts[socket.id] = (nameAttempts[socket.id] || 0) + 1;
+            if (nameAttempts[socket.id] >= MAX_ATTEMPTS) {
+                socket.emit('errorMsg', 'Disconnected for repeated naming violations.');
+                socket.disconnect();
+                return;
+            }
+            socket.emit('errorMsg', `Inappropriate name. ${MAX_ATTEMPTS - nameAttempts[socket.id]} attempts remaining.`);
+            return;
+        }
+        handleSuccessfulJoin(socket, cleanedName);
     });
 
-    socket.on('disconnect', () => {
-        delete players[socket.id];
-        io.emit('playerDisconnected', socket.id);
+    socket.on('update', data => {
+        const p = players[socket.id];
+        if (!p) return;
+
+        // SERVER AUTHORITATIVE MOVEMENT & SPEED VALIDATION
+        const now = Date.now();
+        p.lastUpdateTime = now;
+
+        const isSprinting = (data.stamina < p.stamina); 
+        const allowedSpeed = p.isSpectating ? 12 : (isSprinting ? SPRINT_SPEED : BASE_SPEED);
+        
+        const dx = data.x - p.x;
+        const dy = data.y - p.y;
+        const dist = Math.hypot(dx, dy);
+
+        // Verification: Ensure the player isn't moving faster than physics allows
+        if (dist < allowedSpeed * 1.5) {
+            if (p.isSpectating || !collidesWithWall(data.x, data.y)) {
+                p.x = data.x; p.y = data.y;
+            }
+        }
+        p.stamina = data.stamina;
+        p.angle = data.angle;
     });
+
+    socket.on('fire', data => {
+        const p = players[socket.id];
+        if (!p || p.isSpectating) return;
+        const id = 'b' + (++bulletIdCounter);
+        bullets[id] = { id, x: p.x, y: p.y, angle: data.angle, owner: socket.id, speed: 700 / 30 };
+    });
+
+    socket.on('disconnect', () => { delete players[socket.id]; delete nameAttempts[socket.id]; });
 });
 
-// Bot Logic
-function spawnBot(id) {
-    bots[id] = { x: 500, y: 500, angle: 0, health: 100, color: 'green', name: "CombatBot_" + id.split('_')[1] };
-    botLastShot[id] = 0;
-}
-spawnBot('bot_1');
-
+/* ================= GAME LOOP ================= */
 setInterval(() => {
-    let now = Date.now();
-    Object.keys(bots).forEach(botId => {
-        let bot = bots[botId];
-        let target = null;
-        let minDist = Infinity;
-        
-        Object.keys(players).forEach(pId => {
-            let p = players[pId];
-            if (p.lives <= 0) return; // Don't target dead players
-            let d = Math.sqrt((p.x - bot.x)**2 + (p.y - bot.y)**2);
-            if (d < minDist) { minDist = d; target = p; }
-        });
+    if (matchTimer > 0) matchTimer = Math.max(0, matchTimer - (TICK_RATE / 1000));
+    else if (matchTimer === 0) { matchTimer = -1; setTimeout(resetMatch, 10000); }
 
-        if (target) {
-            bot.angle = Math.atan2(target.y - bot.y, target.x - bot.x);
-            const botMoveSpeed = 10; // Slightly slower than player max for fairness
-
-            if (minDist > 150) {
-                let nextX = bot.x + Math.cos(bot.angle) * botMoveSpeed;
-                let nextY = bot.y + Math.sin(bot.angle) * botMoveSpeed;
-                
-                if (!collidesWithWall(nextX, nextY)) {
-                    bot.x = nextX;
-                    bot.y = nextY;
-                }
+    Object.values(players).forEach(p => {
+        if (!p.isSpectating) {
+            if (Date.now() - p.lastRegenTime > 3000) {
+                p.hp = Math.min(100, p.hp + 5);
+                p.lastRegenTime = Date.now();
             }
-
-            if (Math.random() < 0.15 && now - botLastShot[botId] > 1000) {
-                botLastShot[botId] = now;
-                io.emit('enemyShoot', { 
-                    x: bot.x, 
-                    y: bot.y, 
-                    angle: bot.angle, 
-                    speed: 700, 
-                    timer: 2 
-                });
-            }
+            if (p.stamina < 100) p.stamina = Math.min(100, p.stamina + 0.5);
         }
     });
-    io.emit('botUpdate', bots);
-}, 50);
 
-setInterval(() => {
-    if (matchTime > 0) {
-        matchTime--;
-    } else {
-        // End of match logic
-        let winner = "NO ONE";
-        let maxScore = -1;
-        
-        Object.values(players).forEach(p => {
-            if (p.score > maxScore) {
-                maxScore = p.score;
-                winner = p.name;
+    Object.values(bots).forEach(b => b.update(players));
+
+    Object.values(bullets).forEach(b => {
+        b.x += Math.cos(b.angle) * b.speed;
+        b.y += Math.sin(b.angle) * b.speed;
+
+        // Cleanup: Wall collision OR Out of Bounds
+        if (collidesWithWall(b.x, b.y, 5) || b.x < 0 || b.x > MAP_SIZE || b.y < 0 || b.y > MAP_SIZE) { 
+            delete bullets[b.id]; return; 
+        }
+
+        [...Object.values(players), ...Object.values(bots)].forEach(target => {
+            if (target.id === b.owner || target.isSpectating || target.spawnProtected) return;
+            if (Math.hypot(b.x - target.x, b.y - target.y) < 22) {
+                target.hp -= 10;
+                if (target.hp <= 0) {
+                    const shooter = players[b.owner] || bots[b.owner];
+                    if (shooter) {
+                        
+                        if (b.owner.toString().includes('bot')) {
+                            if (!target.id.toString().includes('bot')) shooter.score += (b.owner === 'bot_bobby' ? 6 : 3);
+                        } else {
+                            if (target.id === 'bot_bobby') shooter.score += 1;
+                            else if (target.id === 'bot_rob') shooter.score += 3;
+                            else if (target.id === 'bot_eliminator') shooter.score += 4;
+                            else shooter.score += 3; 
+                        }
+                    }
+                    // Respawn Logic
+                    if (!target.id.toString().includes('bot')) {
+                        target.lives--;
+                        if (target.lives <= 0) { target.hp = 0; target.isSpectating = true;} 
+                        else {
+                            const respawnPos = getSafeSpawn();
+                            Object.assign(target, { x: respawnPos.x, y: respawnPos.y, hp: 100, stamina: 100 , spawnProtected:true});
+                            activateShield(target)
+                            io.to(target.id).emit('respawned', { x: target.x, y: target.y });
+                        }
+                    } else {
+                        const respawn = getSafeSpawn();
+                        Object.assign(target, { hp: 100, x: respawn.x, y: respawn.y });
+                    }
+                }
+                delete bullets[b.id];
             }
         });
+    });
+    io.emit('state', { players, bots, bullets, matchTimer });
+}, TICK_RATE);
 
-        io.emit('gameOver', { 
-            message: `MATCH OVER! ${winner} WINS!`, 
-            winnerColor: "#00ff44" 
-        });
-
-        // Reset match
-        matchTime = 15 * 60;
-        Object.values(players).forEach(p => {
-            p.score = 0;
-            p.lives = 3;
-            p.health = 100;
-        });
-    }
-    io.emit('timerUpdate', matchTime);
-}, 1000);
-
-http.listen(PORT, () => { console.log(`SniArena live at PORT ${PORT}`); });
+server.listen(PORT, () => { console.log(`SpectreBolt Arena Server Active on http://localhost:${PORT}`); });

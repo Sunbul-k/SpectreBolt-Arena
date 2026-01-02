@@ -1,4 +1,4 @@
-# SniArena
+# SpectreBolt Arena - PSA Not Ever Making Another Game (Traumatized by this game)
 A real-time 1v1 multiplayer 2D sniper game built with **Node.js**, **Socket.io**, and **HTML5 Canvas**.
 
 ## Technical Features
@@ -14,9 +14,6 @@ A real-time 1v1 multiplayer 2D sniper game built with **Node.js**, **Socket.io**
 * **WASD / Arrow Keys:** Movement
 * **Mouse:** Aiming
 * **Left Click:** Shoot
-
-## Why I made this
-My little eight-year-old brother requested me to make him a shooter game that is battle royale-lite so I figured why not? Since he plays roblox on his laptop a lot, him replacing it with this is a dream of mine so that he still has fun without the safety risks.
 
 ## How to Run Locally:
 

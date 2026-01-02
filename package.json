@@ -1,7 +1,7 @@
 {
   "name": "sniarena",
   "version": "1.0.0",
-  "description": "A 1v1 2D shooter game using JS",
+  "description": "A multiplayer 2D shooter game using JS",
   "keywords": [
     "shooter",
     "2D",
