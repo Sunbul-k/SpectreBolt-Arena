@@ -47,6 +47,3 @@ npm run dev
 
 ## License
 This project is licensed under the **GNU GPLv3** - see the [License](LICENSE) file for details.
-
-## Author: 
-### Saif Kayyali
