@@ -209,7 +209,15 @@ io.on('connection', socket => {
         bullets[id] = { id, x: p.x, y: p.y, angle: data.angle, owner: socket.id, speed: 700 / 30 };
     });
 
-    socket.on('disconnect', () => { delete players[socket.id]; delete nameAttempts[socket.id]; });
+    socket.on('disconnect', () => { 
+        delete players[socket.id]; 
+        delete nameAttempts[socket.id]; 
+
+    if (Object.keys(players).length === 0) {
+        console.log("Arena empty. Resetting match...");
+        resetMatch()
+    }
+});
 });
 
 
@@ -253,6 +261,9 @@ setInterval(() => {
                 target.hp -= 10;
                 if (target.hp <= 0) {
                     const shooter = players[b.owner] || bots[b.owner];
+                    const victimName=target.name
+                    const shooterName = shooter ? shooter.name : "The Void";
+                    io.emit('killEvent', { shooter: shooterName, victim: victimName });
                     if (shooter) {
                         
                         if (b.owner.toString().includes('bot')) {

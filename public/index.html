@@ -37,7 +37,28 @@
         }
 
         canvas { display: block; }
-
+        #killFeed {
+            position: fixed;
+            top: 80px;
+            right: 15px;
+            text-align: right;
+            pointer-events: none;
+            z-index: 100;
+        }
+        .kill-msg {
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 5px 10px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            font-size: 14px;
+            animation: fadeOut 4s forwards;
+        }
+        @keyframes fadeOut {
+            0% { opacity: 1; transform: translateX(0); }
+            80% { opacity: 1; }
+            100% { opacity: 0; transform: translateX(20px); }
+        }
         /* Screens */
         #nameScreen, #gameOver {
             position: fixed; inset: 0; background: #222; z-index: 1000;
@@ -139,7 +160,7 @@
         <input type="text" id="nameInput" placeholder="NICKNAME" maxlength="12">
         <button id="startBtn">JOIN ARENA</button>
     </div>
-
+    <div id="killFeed"></div>
     <div id="gameOver" style="display:none;">
         <h1 style="color: var(--accent);">ARENA CLOSED</h1>
         <div id="winnerList" style="font-size: 24px; text-align: center; color: white;"></div>
@@ -302,7 +323,14 @@
             myId = d.id; mapSize = d.mapSize; walls = d.walls; 
             if(players[myId]) { camX = players[myId].x; camY = players[myId].y; }
         });
-
+        socket.on('killEvent', (data) => {
+            const feed = document.getElementById('killFeed');
+            const msg = document.createElement('div');
+            msg.className='kill-msg';
+            msg.innerHTML = `<span style="color:var(--accent)">${data.shooter}</span> killed ${data.victim}`;
+            feed.appendChild(msg);
+            setTimeout(() => msg.remove(), 4000);
+        });
         socket.on('state', s => { 
             const myLocalX = players[myId]?.x;
             const myLocalY = players[myId]?.y;
