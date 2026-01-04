@@ -410,14 +410,20 @@
                 if (me.isSpectating) {
                     me.x += dx; me.y += dy;
                 } else {
-                    if (!clientCollidesWithWall(me.x + dx, me.y)) me.x += dx;
-                    if (!clientCollidesWithWall(me.x, me.y + dy)) me.y += dy;
                     if (isSprinting && me.stamina > 0) me.stamina = Math.max(0, me.stamina - 1.5);
                     else me.stamina = Math.min(100, me.stamina + 0.5);
                 }
             } else me.stamina = Math.min(100, me.stamina + 0.7);
 
-            socket.emit('update', { x: me.x, y: me.y, angle: mouseAngle, stamina: me.stamina });
+            socket.emit('input', {
+                up: keys['KeyW'] || keys['ArrowUp'],
+                down: keys['KeyS'] || keys['ArrowDown'],
+                left: keys['KeyA'] || keys['ArrowLeft'],
+                right: keys['KeyD'] || keys['ArrowRight'],
+                sprint: keys['ShiftLeft'] || keys['ShiftRight'] || isMobileSprinting,
+                angle: mouseAngle
+            });
+
         }, 1000/60);
 
         function clientCollidesWithWall(x, y, r = 20) {
@@ -484,8 +490,6 @@
         }
 
         function draw() {
-            console.log("DRAW TICK", canvas.width, canvas.height);
-
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.fillStyle = "#111"; ctx.fillRect(0, 0, canvas.width, canvas.height);
             const me = players[myId];

@@ -142,7 +142,6 @@ function handleSuccessfulJoin(socket, name) {
         isSpectating: false, 
         spawnProtected:true,
         lastRegenTime: Date.now(),
-        lastUpdateTime: Date.now()
     };
     activateShield(players[socket.id]); 
     socket.emit('init', { id: socket.id, mapSize: MAP_SIZE, walls });
@@ -336,25 +335,13 @@ io.on('connection', socket => {
         handleSuccessfulJoin(socket, cleanedName);
     });
 
-    socket.on('update', data => {
+    socket.on('input', input => {
         const p = players[socket.id];
-        if (p) {
-        
-            const dist = Math.hypot(data.x - p.x, data.y - p.y);
-            const maxAllowed = 45; 
+        if (!p || p.isSpectating) return;
 
-            if (!p.isSpectating && dist > maxAllowed) {
-                const angle = Math.atan2(data.y - p.y, data.x - p.x);
-                p.x += Math.cos(angle) * maxAllowed;
-                p.y += Math.sin(angle) * maxAllowed;
-            }else{
-                p.x = data.x;
-                p.y = data.y;
-            }
-            p.stamina = Math.max(0, Math.min(100, data.stamina));
-            p.angle = data.angle;
-        }
+        p.input = input;
     });
+
 
     socket.on('fire', data => {
         const p = players[socket.id];
@@ -389,13 +376,36 @@ setInterval(() => {
     else if(matchTimer <= 0 && matchTimer!==-1) { matchTimer = -1; setTimeout(resetMatch, 10000); }
 
     Object.values(players).forEach(p => {
-        if (!p.isSpectating) {
-            if (Date.now() - p.lastRegenTime > 3000) {
-                p.hp = Math.min(100, p.hp + 5);
-                p.lastRegenTime = Date.now();
+        if (p.isSpectating || !p.input) return;
+
+        let speed = p.input.sprint && p.stamina > 0
+            ? SPRINT_SPEED
+            : BASE_SPEED;
+
+        let dx = 0, dy = 0;
+        if (p.input.up) dy--;
+        if (p.input.down) dy++;
+        if (p.input.left) dx--;
+        if (p.input.right) dx++;
+
+        if (dx || dy) {
+            const len = Math.hypot(dx, dy);
+            dx /= len;
+            dy /= len;
+
+            const nx = p.x + dx * speed;
+            const ny = p.y + dy * speed;
+
+            if (!collidesWithWall(nx, ny)) {
+                p.x = nx;
+                p.y = ny;
             }
-            if (p.stamina < 100) p.stamina = Math.min(100, p.stamina + 0.5);
+
+            if (p.input.sprint) {
+                p.stamina = Math.max(0, p.stamina - 1);
+            }
         }
+        p.angle = p.input.angle;
     });
 
     Object.values(bots).forEach(b => {if (b.retired) return;if (b.id === 'bot_eliminator') b.updateAdvanced(players); else b.update(players)});
