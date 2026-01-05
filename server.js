@@ -24,10 +24,10 @@ const RELEASES = {
 
 const MAP_SIZE = 2000;
 const TICK_RATE = 1000 / 60;
-const PLAYER_RADIUS = 20;
 const MAX_ATTEMPTS = 5;
 const BASE_SPEED = 6.0;
 const SPRINT_SPEED = 9.5;
+const ENTITY_RADIUS = 18;
 
 
 let players = {};
@@ -106,7 +106,7 @@ function shouldRespawnBot(botId) {
 }
 
 
-function collidesWithWall(x, y, r = PLAYER_RADIUS) {
+function collidesWithWall(x, y, r = ENTITY_RADIUS) {
     if (x < r || y < r || x > MAP_SIZE - r || y > MAP_SIZE - r) return true;
     return walls.some(w => x + r > w.x && x - r < w.x + w.w && y + r > w.y && y - r < w.y + w.h);
 }
@@ -258,7 +258,7 @@ class Bot {
         let nx = this.x + (vx / len) * moveSpeed;
         let ny = this.y + (vy / len) * moveSpeed;
 
-        if (!collidesWithWall(nx, ny, 18)) {
+        if (!collidesWithWall(nx, ny, ENTITY_RADIUS)) {
             this.x = nx;
             this.y = ny;
         } else {
@@ -311,7 +311,7 @@ class Bot {
         let nx = this.x + (vx / len) * moveSpeed;
         let ny = this.y + (vy / len) * moveSpeed;
 
-        if (!collidesWithWall(nx, ny, 18)) {
+        if (!collidesWithWall(nx, ny, ENTITY_RADIUS)) {
             this.x = nx;
             this.y = ny;
         } else {
@@ -416,16 +416,17 @@ setInterval(() => {
         }
         if (dx || dy) {
             const len = Math.hypot(dx, dy);
-            dx=(dx/len) *1.04;
-            dy=(dy/len) *1.04;
+            dx /= len;
+            dy /= len;
+
 
             let nx = p.x + dx * speed;
-            if (!collidesWithWall(nx, p.y, 18)) {
+            if (!collidesWithWall(nx, p.y, ENTITY_RADIUS)) {
                 p.x = nx;
             }
 
             let ny = p.y + dy * speed;
-            if (!collidesWithWall(p.x, ny, 18)) {
+            if (!collidesWithWall(p.x, ny, ENTITY_RADIUS)) {
                 p.y = ny;
             }
 
@@ -440,16 +441,17 @@ setInterval(() => {
         b.y += Math.sin(b.angle) * b.speed;
 
         
-        if (collidesWithWall(b.x, b.y, 5) || b.x < 0 || b.x > MAP_SIZE || b.y < 0 || b.y > MAP_SIZE) { 
+        if (collidesWithWall(b.x, b.y, ENTITY_RADIUS) || b.x < 0 || b.x > MAP_SIZE || b.y < 0 || b.y > MAP_SIZE) { 
             delete bullets[b.id]; return; 
         }
 
         [...Object.values(players), ...Object.values(bots)].forEach(target => {
             if (target.id === b.owner || target.isSpectating || target.spawnProtected || target.retired) return;
-            if (Math.hypot(b.x - target.x, b.y - target.y) < 22) {
+            if (Math.hypot(b.x - target.x, b.y - target.y) < ENTITY_RADIUS) {
                 const baseDamage = 10;
                 const multiplier = target.damageTakenMultiplier ?? 1;
                 target.hp -= baseDamage * multiplier;
+                target.lastRegenTime = Date.now();
 
                 if (target.hp <= 0) {
                     const shooter = players[b.owner] || bots[b.owner];
@@ -473,7 +475,7 @@ setInterval(() => {
                         if (target.lives <= 0) { target.hp = 0; target.isSpectating = true;} 
                         else {
                             const respawnPos = getSafeSpawn();
-                            Object.assign(target, { x: respawnPos.x, y: respawnPos.y, hp: 100, stamina: 100 , spawnProtected:true});
+                            Object.assign(target, { x: respawnPos.x, y: respawnPos.y, hp: 100, stamina: 100 , spawnProtected:true, lastRegenTime: Date.now()});
                             activateShield(target)
                             io.to(target.id).emit('respawned', { x: target.x, y: target.y });
                         }

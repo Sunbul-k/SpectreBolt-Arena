@@ -277,7 +277,7 @@
             joy.x = (Math.cos(angle) * dist) / maxDist;
             joy.y = (Math.sin(angle) * dist) / maxDist;
 
-            if (Math.hypot(joy.x, joy.y) < 0.08) {
+            if (Math.hypot(joy.x, joy.y) < 0.06) {
                 joy.x = 0;
                 joy.y = 0;
             }
@@ -428,7 +428,7 @@
             if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
             if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
 
-            if (joy.active) {
+            if (joy.active && Math.abs(joy.x) + Math.abs(joy.y) > 0) {
                 dx = joy.x;
                 dy = joy.y;
             }
@@ -437,14 +437,15 @@
                 me.x += dx * 15;
                 me.y += dy * 15;
             }
-
+            
+            const JOY_THRESHOLD = 0.06;
             socket.emit('input', {
-                up:    joy.active ? joy.y < 0 : keys['KeyW'] || keys['ArrowUp'],
-                down:  joy.active ? joy.y > 0 : keys['KeyS'] || keys['ArrowDown'],
-                left:  joy.active ? joy.x < 0 : keys['KeyA'] || keys['ArrowLeft'],
-                right: joy.active ? joy.x > 0 : keys['KeyD'] || keys['ArrowRight'],
-                sprint: isMobileSprinting || keys['ShiftLeft'] || keys['ShiftRight'],
-                angle: mouseAngle
+                up:    joy.active ? joy.y < -JOY_THRESHOLD : (keys['KeyW'] || keys['ArrowUp']),
+                down:  joy.active ? joy.y >  JOY_THRESHOLD : (keys['KeyS'] || keys['ArrowDown']),
+                left:  joy.active ? joy.x < -JOY_THRESHOLD : (keys['KeyA'] || keys['ArrowLeft']),
+                right: joy.active ? joy.x >  JOY_THRESHOLD : (keys['KeyD'] || keys['ArrowRight']),
+                sprint:isSprinting,
+                angle:mouseAngle
             });
 
 
@@ -520,7 +521,7 @@
             if (!me) { requestAnimationFrame(draw); return; }
             ctx.save()
 
-            camX += (me.x - camX) * 0.45; camY += (me.y - camY) * 0.45;
+            camX += (me.x - camX) * 0.7; camY += (me.y - camY) * 0.7;
             
             ctx.translate(canvas.width/2 - camX, canvas.height/2 - camY);
 
