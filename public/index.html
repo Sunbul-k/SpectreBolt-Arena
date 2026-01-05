@@ -225,6 +225,7 @@
         let moveTouchId = null;
         let rafId = null;
         let isDrawing = false;
+        let personalBest = Number(localStorage.getItem("personalBest") || 0);
 
         
         window.addEventListener('load', () => {
@@ -438,7 +439,7 @@
             if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
             if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
 
-            if (joy.active && Math.abs(joy.x) + Math.abs(joy.y) > 0) {
+            if (joy.active) {
                 dx = joy.x;
                 dy = joy.y;
             }
@@ -448,6 +449,7 @@
                 me.y += dy * 15;
             }
 
+            const aimingAngle = joy.active? Math.atan2(joy.y, joy.x): mouseAngle;
 
             const JOY_THRESHOLD = 0.06;
             socket.emit('input', {
@@ -460,7 +462,7 @@
                     (keys['KeyW'] || keys['ArrowUp'] ? 1 : 0)
                 ),
                 sprint: isSprinting,
-                angle:joy.active && (Math.abs(joy.x) + Math.abs(joy.y) > 0.1)? Math.atan2(joy.y, joy.x): mouseAngle
+                angle:aimingAngle
             });
 
 
@@ -531,6 +533,7 @@
         }
 
         function draw(){
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
             if (document.hidden) {
                 scheduleDraw();
                 return;
@@ -627,7 +630,16 @@
 
             if (matchTimer <= 0) {
                 document.getElementById('gameOver').style.display = 'flex';
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.fillStyle = "#111";
+                ctx.fillRect(0, 0, canvas.width, canvas.height)
                 drawMinimap();
+                if (me.score > personalBest) {
+                    personalBest = me.score;
+                    localStorage.setItem("personalBest", personalBest);
+                }
+                document.getElementById('score').innerHTML =`SCORE: ${me.score}<br>BEST: ${personalBest}`;
+                scheduleDraw()
                 return;
             }
             drawMinimap();
