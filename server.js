@@ -388,35 +388,44 @@ setInterval(() => {
     else if(matchTimer <= 0 && matchTimer!==-1) { matchTimer = -1; setTimeout(resetMatch, 10000); }
 
     Object.values(players).forEach(p => {
-        if (p.isSpectating || !p.input) return;
-        
+        if (!p.isSpectating && Date.now() - p.lastRegenTime > 3000) {
+            p.hp = Math.min(100, p.hp + 5);
+            p.lastRegenTime = Date.now();
+        }
+        if (!p.input) return;
 
-        let speed = p.input.sprint && p.stamina > 0
-            ? SPRINT_SPEED
-            : BASE_SPEED;
+
+        let speed = p.isSpectating ? 15 : (
+            p.input.sprint && p.stamina > 0
+                ? SPRINT_SPEED
+                : BASE_SPEED
+        );
+
 
         let dx = 0, dy = 0;
         if (p.input.up) dy--;
         if (p.input.down) dy++;
         if (p.input.left) dx--;
         if (p.input.right) dx++;
-
-        if (p.input.sprint && (dx || dy)) {
-            p.stamina = Math.max(0, p.stamina - 1);
-        } else {
-            p.stamina = Math.min(100, p.stamina + 0.6);
+        if (!p.isSpectating){
+            if (p.input.sprint && (dx || dy)) {
+                p.stamina = Math.max(0, p.stamina - 1);
+            } else {
+                p.stamina = Math.min(100, p.stamina + 0.6);
+            }
         }
-
         if (dx || dy) {
             const len = Math.hypot(dx, dy);
             dx=(dx/len) *1.04;
             dy=(dy/len) *1.04;
 
-            const nx = p.x + dx * speed;
-            const ny = p.y + dy * speed;
-
-            if (!collidesWithWall(nx, ny, 18)) {
+            let nx = p.x + dx * speed;
+            if (!collidesWithWall(nx, p.y, 18)) {
                 p.x = nx;
+            }
+
+            let ny = p.y + dy * speed;
+            if (!collidesWithWall(p.x, ny, 18)) {
                 p.y = ny;
             }
 

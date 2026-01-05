@@ -277,7 +277,7 @@
             joy.x = (Math.cos(angle) * dist) / maxDist;
             joy.y = (Math.sin(angle) * dist) / maxDist;
 
-            if (Math.hypot(joy.x, joy.y) < 0.15) {
+            if (Math.hypot(joy.x, joy.y) < 0.08) {
                 joy.x = 0;
                 joy.y = 0;
             }
@@ -294,17 +294,27 @@
         }
 
         canvas.addEventListener('touchstart', e => {
+            const rect = joyBase.getBoundingClientRect();
+
             for (const t of e.changedTouches) {
-                if (moveTouchId === null && t.clientX < window.innerWidth / 2) {
+                const insideJoystick =
+                    t.clientX >= rect.left &&
+                    t.clientX <= rect.right &&
+                    t.clientY >= rect.top &&
+                    t.clientY <= rect.bottom;
+
+                if (moveTouchId === null && insideJoystick) {
                     moveTouchId = t.identifier;
                     joy.active = true;
                     joy.identifier = t.identifier;
                     updateJoystick(t);
-                } else if (t.target.id !== 'sprintBtn' && t.target.id !== 'mapToggle') {
+                } 
+                else if (t.target.id !== 'sprintBtn' && t.target.id !== 'mapToggle') {
                     handleTapToShoot(t);
                 }
             }
         }, { passive: false });
+
 
 
 
