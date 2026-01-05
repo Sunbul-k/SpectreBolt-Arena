@@ -530,13 +530,14 @@
             }
         }
 
-        function draw() {
+        function draw(){
             if (document.hidden) {
                 scheduleDraw();
                 return;
             }
 
             if (!players || !players[myId]) {
+                scheduleDraw()
                 return;
             }
 
@@ -554,6 +555,7 @@
                 ctx.setTransform(1, 0, 0, 1, 0, 0);
                 ctx.fillStyle = "#111";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
+                scheduleDraw();
                 return;
             }
 
