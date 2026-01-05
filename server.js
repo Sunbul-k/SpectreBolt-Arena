@@ -31,6 +31,7 @@ const ENTITY_RADIUS = 18;
 const NET_TICK = 1000 / 20;
 const MAX_PLAYERS=15;
 const JOIN_CUTOFF_SECONDS=5*60;
+const BULLET_LIFETIME = 1200;
 
 
 let lastNetSend = 0;
@@ -44,6 +45,7 @@ let matchTimer = 15 * 60;
 let walls = generateWalls(12);
 let resetScheduled = false;
 let matchStarted = false;
+let botAccumulator = 0;
 
 
 const BANNED_WORDS = ['fuck', 'nigger', 'nigga', 'bitch', 'slut', 'nazi', 'hitler', 'milf', 'cunt', 'retard', 'ass', 'dick', 'diddy', 'epstein', 'diddle', 'rape', 'pedo'];
@@ -196,6 +198,7 @@ class Bot {
         this.lastRegenTime = Date.now();
         this.spawnTime = Date.now();
         this.isRetreating = false;
+        this.spawnProtectedUntil = 0;
     }
 
     fireAtPlayers(players) {
@@ -234,7 +237,8 @@ class Bot {
                     y: this.y,
                     angle: this.angle + (Math.random() - 0.5) * 0.15,
                     owner: this.id,
-                    speed: this.bulletSpeed / 60
+                    speed: this.bulletSpeed / 60,
+                    born:Date.now()
                 };
             }
 
@@ -377,7 +381,7 @@ io.on('connection', socket => {
         const p = players[socket.id];
         if (!p || p.isSpectating) return;
         const id = 'b' + (++bulletIdCounter);
-        bullets[id] = { id, x: p.x, y: p.y, angle: data.angle, owner: socket.id, speed: 900 / 60 };
+        bullets[id] = { id, x: p.x, y: p.y, angle: data.angle, owner: socket.id, speed: 900 / 60, born:Date.now() };
     });
 
     socket.on('disconnect', () => { 
@@ -413,7 +417,7 @@ setInterval(() => {
     const activePlayers = Object.values(players).some(p => !p.isSpectating);
 
     const now = Date.now();
-    const delta = (now - lastTickTime) / 1000;
+    const delta = Math.min((now - lastTickTime) / 1000, 0.05);
     lastTickTime = now;
 
     if (matchStarted && activePlayers) {
@@ -473,10 +477,13 @@ setInterval(() => {
 
         p.angle = p.input.angle;
     });
-
-    Object.values(bots).forEach(b => {if (b.retired) return; if (b.id === 'bot_eliminator') b.updateAdvanced(players); else b.update(players);});
-
+    botAccumulator+=delta;
+    if (botAccumulator>= 1/30){
+        Object.values(bots).forEach(b => {if (b.retired) return; if (b.id === 'bot_eliminator') b.updateAdvanced(players); else b.update(players);});
+        botAccumulator=0;
+    }
     Object.values(bullets).forEach(b => {
+        if (Date.now() -b.born > BULLET_LIFETIME) {delete bullets[b.id];return;}
         b.x += Math.cos(b.angle) * b.speed;
         b.y += Math.sin(b.angle) * b.speed;
 
