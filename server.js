@@ -25,8 +25,8 @@ const RELEASES = {
 const MAP_SIZE = 2000;
 const TICK_RATE = 1000 / 60;
 const MAX_ATTEMPTS = 5;
-const BASE_SPEED = 3.2;
-const SPRINT_SPEED = 5.0;
+const BASE_SPEED = 3.9;
+const SPRINT_SPEED = 5.8;
 const ENTITY_RADIUS = 18;
 
 
@@ -38,6 +38,7 @@ let bulletIdCounter = 0;
 let matchTimer = 15 * 60;
 let walls = generateWalls(12);
 let resetScheduled = false;
+let matchStarted = false;
 
 
 const BANNED_WORDS = ['fuck', 'nigger', 'nigga', 'bitch', 'slut', 'nazi', 'hitler', 'milf', 'cunt', 'retard', 'ass', 'dick', 'diddy', 'epstein', 'diddle', 'rape', 'pedo'];
@@ -132,6 +133,10 @@ function activateShield(player) {
 }
 
 function handleSuccessfulJoin(socket, name) {
+    if (!matchStarted) {
+        matchStarted = true;
+        matchTimer = 15 * 60;
+    }
     if (matchTimer <= 0) resetMatch();
     const pos = getSafeSpawn();
     players[socket.id] = {
@@ -151,14 +156,14 @@ function spawnSpecialBots() {
     delete bots['bot_eliminator'];
 
     if (RELEASES.ROB && Math.random() < 0.75) {
-        const rob = new Bot('bot_rob', 'Rob', '#4A90E2', 3.2, 950);
+        const rob = new Bot('bot_rob', 'Rob', '#4A90E2', 3.9, 950);
         rob.damageTakenMultiplier = 1.0;
         bots['bot_rob'] = rob;
         console.log('Rob has entered the arena.');
     }
 
     if (RELEASES.ELIMINATOR && Math.random() < 0.25) {
-        const elim = new Bot('bot_eliminator', 'Eliminator', '#E24A4A', 2.8, 1100);
+        const elim = new Bot('bot_eliminator', 'Eliminator', '#E24A4A', 3.1, 1100);
         elim.isRetreating = false;
         elim.damageTakenMultiplier = 0.75;
         bots['bot_eliminator'] = elim;
@@ -171,6 +176,7 @@ function resetMatch() {
     matchTimer = 15 * 60;
     bullets = {};
     walls = generateWalls(12);
+    matchStarted = Object.values(players).length > 0;
     Object.values(players).forEach(p => {
         const pos = getSafeSpawn();
         Object.assign(p, { x: pos.x, y: pos.y, hp: 100, lives: 3, score: 0, isSpectating: false });
@@ -325,7 +331,7 @@ class Bot {
 
 
 
-bots['bot_bobby'] = new Bot('bot_bobby', 'Bobby', '#8A9A5B', 2.4, 800);
+bots['bot_bobby'] = new Bot('bot_bobby', 'Bobby', '#8A9A5B', 2.6, 800);
 bots['bot_bobby'].damageTakenMultiplier = 1.35;
 
 
@@ -385,8 +391,13 @@ setInterval(() => {
         }
     }
 
-    if (matchTimer > 0) matchTimer = Math.max(0, matchTimer - (TICK_RATE / 1000));
-    else if (matchTimer <= 0 && matchTimer !== -1 && !resetScheduled) {
+    const activePlayers = Object.values(players).some(p => !p.isSpectating);
+
+    if (matchStarted && activePlayers) {
+        matchTimer = Math.max(0, matchTimer - (TICK_RATE / 1000));
+    }
+
+    if (matchTimer <= 0 && matchTimer !== -1 && !resetScheduled) {
         matchTimer = -1;
         resetScheduled = true;
         setTimeout(() => {
