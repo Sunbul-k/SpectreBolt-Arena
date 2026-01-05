@@ -471,7 +471,7 @@ setInterval(() => {
             p.hp = Math.min(100, p.hp + 5);
             p.lastRegenTime = Date.now();
         }
-        if (!p.input) return;
+        if (!p.input && !p.isSpectating) return;
 
 
         let speed = p.isSpectating ? 15 : (p.input.sprint && p.stamina > 0? SPRINT_SPEED: BASE_SPEED);

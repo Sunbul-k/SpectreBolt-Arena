@@ -470,7 +470,8 @@
             if (joy.active && (joy.x !== 0 || joy.y !== 0)) {
                 aimingAngle = Math.atan2(joy.y, joy.x);
             }
-            const input = { moveX:dx, moveY:dy, sprint:isSprinting, angle:aimingAngle };
+            const quantAngle = Math.round(aimingAngle * 100) / 100;
+            const input = { moveX:dx, moveY:dy, sprint:isSprinting, angle: quantAngle };
             if (!lastInput ||input.moveX !== lastInput.moveX ||input.moveY !== lastInput.moveY ||input.sprint !== lastInput.sprint ||input.angle !== lastInput.angle){
                 socket.emit('input', input);
                 lastInput = input;
