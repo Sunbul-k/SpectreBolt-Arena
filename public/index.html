@@ -214,7 +214,7 @@
         let keys = {};
         let mouseAngle = 0;
         let isMobileSprinting = false;
-        let joy = { active: false, x: 0, y: 0, identifier: null };
+        let joy = { active: false, startX: 0, startY: 0, id: null, x:0, y:0 };
         let camX=0; let camY=0;
         let moveTouchId = null;
         let personalBest = Number(localStorage.getItem("personalBest") || 0);
@@ -296,50 +296,64 @@
             socket.emit('fire', { angle: angle });
         }
 
-        canvas.addEventListener('touchstart', e => {
-            const rect = joyBase.getBoundingClientRect();
+        const MAX_DIST = 50;
+        const DEADZONE = 6;
 
-            for (const t of e.changedTouches) {
-                const insideJoystick =
-                    t.clientX >= rect.left &&
-                    t.clientX <= rect.right &&
-                    t.clientY >= rect.top &&
-                    t.clientY <= rect.bottom;
+        joyBase.addEventListener('touchstart', e => {
+            const t = e.changedTouches[0];
+            joy.active = true;
+            joy.id = t.identifier;
 
-                if (moveTouchId === null && insideJoystick) {
-                    moveTouchId = t.identifier;
-                    joy.active = true;
-                    joy.identifier = t.identifier;
-                    updateJoystick(t);
-                } 
-                else if (t.target.id !== 'sprintBtn' && t.target.id !== 'mapToggle') {
-                    handleTapToShoot(t);
-                }
-            }
+            joy.startX = t.clientX;
+            joy.startY = t.clientY;
+
+            joyBase.style.left = (joy.startX - 70) + "px";
+            joyBase.style.top  = (joy.startY - 70) + "px";
+
+            joyKnob.style.transform = "translate(0,0)";
+            e.preventDefault();
         }, { passive: false });
 
 
-
-
-        canvas.addEventListener('touchmove', e => {
+        joyBase.addEventListener('touchmove', e => {
             for (const t of e.changedTouches) {
-                if (t.identifier === moveTouchId) {
-                    updateJoystick(t);
-                }
-            }
-        }, { passive: false });
+                if (t.identifier !== joy.id) continue;
 
+                let dx = t.clientX - joy.startX;
+                let dy = t.clientY - joy.startY;
 
-        canvas.addEventListener('touchend', e => {
-            for (const t of e.changedTouches) {
-                if (t.identifier === moveTouchId) {
-                    moveTouchId = null;
-                    joy.active = false;
-                    joy.identifier = null;
+                const dist = Math.hypot(dx, dy);
+                const clamped = Math.min(dist, MAX_DIST);
+                const angle = Math.atan2(dy, dx);
+
+                if (dist < DEADZONE) {
                     joy.x = 0;
                     joy.y = 0;
-                    joyKnob.style.transform = `translate(0,0)`;
+                    joyKnob.style.transform = "translate(0,0)";
+                    return;
                 }
+
+                joy.x = Math.cos(angle) * (clamped / MAX_DIST);
+                joy.y = Math.sin(angle) * (clamped / MAX_DIST);
+
+                joyKnob.style.transform =
+                    `translate(${joy.x * MAX_DIST}px, ${joy.y * MAX_DIST}px)`;
+
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+
+        joyBase.addEventListener('touchend', e => {
+            for (const t of e.changedTouches) {
+                if (t.identifier !== joy.id) continue;
+
+                joy.active = false;
+                joy.id = null;
+                joy.x = 0;
+                joy.y = 0;
+
+                joyKnob.style.transform = "translate(0,0)";
             }
         }, { passive: false });
 
