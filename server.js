@@ -137,6 +137,24 @@ function getSafeSpawn() {
     } while (collidesWithWall(x, y, SPAWN_BUFFER) && attempts < 100);
     return { x, y };
 }
+const USED_COLORS = new Set();
+
+function generateUniqueColor() {
+    let attempts = 0;
+
+    while (attempts < 50) {
+        const hue = Math.floor(Math.random() * 360);
+        const color = `hsl(${hue},70%,50%)`;
+
+        if (!USED_COLORS.has(color)) {
+            USED_COLORS.add(color);
+            return color;
+        }
+        attempts++;
+    }
+
+    return `hsl(${Math.random() * 360},70%,50%)`;
+}
 
 function handleSuccessfulJoin(socket, name) {
     if (matchTimer <= 0) resetMatch();
@@ -148,7 +166,7 @@ function handleSuccessfulJoin(socket, name) {
         id: socket.id,
         name: name,
         x: pos.x, y: pos.y, hp: 100, lives: 3, score: 0, stamina: 100,
-        angle: 0, color: `hsl(${Math.random() * 360},70%,50%)`,
+        angle: 0, color: generateUniqueColor(),
         isSpectating: false, 
         spawnProtectedUntil: Date.now() + 3000,
         lastRegenTime: Date.now(),
@@ -169,7 +187,9 @@ function spawnSpecialBots() {
 
     if (RELEASES.ROB && Math.random() < 0.75) {
         const rob = new Bot('bot_rob', 'Rob', '#4A90E2', BASE_SPEED, 950);
-        rob.damageTakenMultiplier = 1.0;
+        rob.damageTakenMultiplier = 0.65;
+        rob.hp = 160;
+        rob.regenRate = 8; // per tick
         bots['bot_rob'] = rob;
         console.log('Rob has entered the arena.');
     }
@@ -217,6 +237,9 @@ class Bot {
         this.spawnTime = Date.now();
         this.isRetreating = false;
         this.spawnProtectedUntil = 0;
+        this.recentHits = 0;
+        this.lastHitTime = 0;
+        this.hitChain = 0;
     }
 
     fireAtPlayers(players) {
@@ -241,13 +264,22 @@ class Bot {
 
         const fireCooldown =
             this.id === 'bot_bobby' ? 1500 :
-            this.id === 'bot_rob' ? 900 :
+            this.id === 'bot_rob' ? 700 :
             400; // Eliminator
 
-        const burstChance =
-            this.id === 'bot_eliminator' && Date.now() - this.spawnTime > 2500? 0.35: 0;
+        let burstChance = 0;
+
+        if (this.id === 'bot_eliminator') {
+            if (this.recentHits >= 4) {
+                burstChance = 1; 
+                this.recentHits = 0;
+            } else {
+                burstChance = 0.25;
+            }
+        }
+
         if (minDist < 700 && Date.now() - this.lastFireTime > fireCooldown) {
-            const shots = Math.random() < burstChance ? 3 : 1;
+            const shots = Math.random() < burstChance ? 4 : 1;
 
             for (let i = 0; i < shots; i++) {
                 const bid = 'bot_b' + (++bulletIdCounter);
@@ -255,7 +287,7 @@ class Bot {
                     id: bid,
                     x: this.x,
                     y: this.y,
-                    angle: this.angle + (Math.random() - 0.5) * 0.15,
+                    angle: this.angle + (Math.random() - 0.5) * 0.08,
                     owner: this.id,
                     speed: this.bulletSpeed / 60,
                     born:Date.now(),
@@ -269,7 +301,11 @@ class Bot {
     update(players) {
         let moveSpeed=this.speed
         if (Date.now() - this.lastRegenTime > 3000) {
-            this.hp = Math.min(100, this.hp + 5);
+            const maxHp = this.id === 'bot_rob' ? 160 : 100;
+            const regen = this.id === 'bot_rob' ? 2 : 5;
+
+            this.hp = Math.min(maxHp, this.hp + regen);
+
             this.lastRegenTime = Date.now();
         }
 
@@ -294,7 +330,9 @@ class Bot {
 
     updateAdvanced(players) {
         if (Date.now() - this.lastRegenTime > 3000) {
-            this.hp = Math.min(100, this.hp + 5);
+            const maxHp = 100;
+            this.hp = Math.min(maxHp, this.hp + 5);
+
             this.lastRegenTime = Date.now();
         }
 
@@ -429,6 +467,9 @@ io.on('connection', socket => {
         if (Object.keys(players).length === 0) {
             matchStarted = false;
             resetScheduled = false;
+        }
+        if (players[socket.id]?.color) {
+            USED_COLORS.delete(players[socket.id].color);
         }
 
         if (Object.keys(players).length === 0 && !resetScheduled) {
@@ -574,9 +615,35 @@ setInterval(() => {
                 const HIT_RADIUS = ENTITY_RADIUS + BULLET_RADIUS + 6;
 
                 if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
-                    const baseDamage = 10;
+                    let damage = 10;
+
+                    if (target.id === 'bot_rob') {
+                        const now = Date.now();
+
+                        if (now - target.lastHitTime < 250) {
+                            target.hitChain++;
+                        } else {
+                            target.hitChain = 0;
+                        }
+
+                        target.lastHitTime = now;
+                        const spamReduction = Math.min(0.6, target.hitChain * 0.1);
+                        damage *= (1 - spamReduction);
+                    }
+                    if (target.id === 'bot_eliminator') {
+                        const now = Date.now();
+                        if (now - target.lastHitTime < 400) {
+                            target.recentHits++;
+                        } else {
+                            target.recentHits = 1;
+                        }
+                        target.lastHitTime = now;
+                    }
+
+
                     const multiplier = target.damageTakenMultiplier ?? 1;
-                    target.hp -= baseDamage * multiplier;
+                    target.hp -= damage * multiplier;
+
                     target.lastRegenTime = Date.now();
 
                     if (target.hp <= 0) {
@@ -660,7 +727,9 @@ setInterval(() => {
                 spawnProtected: Date.now() < p.spawnProtectedUntil,
                 stamina: p.stamina,
                 score:p.score,
-                lives:p.lives
+                lives:p.lives,
+                color:p.color,
+                name:p.name
             };
         }
         const slimBots = {};

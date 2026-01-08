@@ -1,0 +1,21 @@
+{
+  "name": "SpectreBolt Arena",
+  "short_name": "SpectreBolt",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#0f4",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/download.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/download.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
