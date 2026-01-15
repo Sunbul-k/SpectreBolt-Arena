@@ -220,8 +220,6 @@ function resetMatch() {
     specialsSpawned = false;
     spawnSpecialBots();
 
-    
-
     Object.values(players).forEach(p => {
         const pos = getSafeSpawn();
         Object.assign(p, { x: pos.x, y: pos.y, hp: 100, lives: 3, score: 0, isSpectating: false, lastFireTime: 0 });
@@ -230,7 +228,7 @@ function resetMatch() {
         const pos = getBotSafeSpawn();
         Object.assign(b, { x: pos.x, y: pos.y, hp: 100, score: 0 , spawnTime:Date.now()});
     });
-    io.emit('mapUpdate', { mapSize, walls });
+    io.emit('mapUpdate', { mapSize:MAP_SIZE, walls });
     io.emit('matchReset');
 }
 
