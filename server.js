@@ -204,9 +204,13 @@ function handleSuccessfulJoin(socket, name, forcedSpectator = false) {
         fireCooldown: 100, // ms (10 shots/sec)
         input: {moveX: 0,moveY: 0,sprint: false,angle: 0}
     };
-    if (matchStarted && Object.values(players).some(p => !p.isSpectating)) {
+    if (!matchStarted && !forcedSpectator) {
+        matchStarted = true;
+        matchTimer = 15 * 60;
         spawnSpecialBots();
     }
+
+    
     
     socket.emit('init', { id: socket.id, mapSize: MAP_SIZE, walls, spawnX: pos.x, spawnY: pos.y,name, forcedSpectator});
 
