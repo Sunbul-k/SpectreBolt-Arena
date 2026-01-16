@@ -774,43 +774,17 @@ setInterval(() => {
     if (Date.now() - lastNetSend > NET_TICK) {
         const slimPlayers = {};
         for (const [id, p] of Object.entries(players)) {
-            slimPlayers[id] = {
-                x: p.x,
-                y: p.y,
-                hp: p.hp,
-                angle: p.angle,
-                isSpectating: p.isSpectating,
-                forcedSpectator: p.forcedSpectator,
-                spawnProtected: Date.now() < p.spawnProtectedUntil,
-                stamina: p.stamina,
-                score:p.score,
-                lives:p.lives,
-                color:p.color,
-                name:p.name
-            };
+            slimPlayers[id] = {x: p.x,y: p.y,hp: p.hp,angle: p.angle,isSpectating: p.isSpectating,forcedSpectator: p.forcedSpectator,spawnProtected: Date.now() < p.spawnProtectedUntil,stamina: p.stamina,score:p.score,lives:p.lives,color:p.color,name:p.name};
         }
         const slimBots = {};
         for (const [id, b] of Object.entries(bots)) {
-            if (b.retired) continue;
-            slimBots[id] = {
-                id: b.id,
-                x: b.x,
-                y: b.y,
-                hp: b.hp,
-                score: b.score,
-                angle: b.angle,
-                name: b.name,
-                color: b.color
-            };
+            slimBots[id] = {id: b.id,x: b.x,y: b.y,hp: b.hp,score: b.score,angle: b.angle,name: b.name,color: b.color,retired: !!b.retired};
         }
+
 
         const slimBullets = {};
         for (const [id, b] of Object.entries(bullets)) {
-            slimBullets[id] = {
-                x: b.x,
-                y: b.y,
-                angle: b.angle
-            };
+            slimBullets[id] = {x: b.x,y: b.y,angle: b.angle};
         }
 
         io.emit('state', { players:slimPlayers, bots:slimBots, bullets:slimBullets, matchTimer });

@@ -1,3 +1,9 @@
+/*
+ * SpectreBolt Arena - Multiplayer 2D Shooter Game Client-Side
+ * Copyright (C) 2026 Saif Kayyali
+ * GNU GPLv3
+ */
+
 const socket = io({ transports: ['websocket'], upgrade: false });
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -234,18 +240,14 @@ window.addEventListener('keyup', e => keys[e.code] = false);
 window.addEventListener('mousemove', e => {
     if (joy.active) return;
 
-    const me = players[myId];
-    if (!me) return;
-
     const rect = canvas.getBoundingClientRect();
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
 
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
 
-    const worldX = camX - canvas.width / 2 + mx;
-    const worldY = camY - canvas.height / 2 + my;
-
-    mouseAngle = Math.atan2(worldY - me.y, worldX - me.x);
+    mouseAngle = Math.atan2(my - cy, mx - cx);
 });
 window.addEventListener('keydown', e => {
     keys[e.code] = true;
@@ -489,7 +491,7 @@ setInterval(() => {
             aimingAngle = Math.atan2(shootJoy.y, shootJoy.x);
         }
 
-    const quantAngle =shootJoy.active    ? Math.round(aimingAngle * 100) / 100: aimingAngle;
+    const quantAngle = Math.round(aimingAngle * 1000) / 1000;
 
     const input = { moveX:dx, moveY:dy, sprint:isSprinting, angle: quantAngle };
     if (me.isSpectating ||!lastInput ||input.moveX !== lastInput.moveX ||input.moveY !== lastInput.moveY ||input.sprint !== lastInput.sprint ||input.angle !== lastInput.angle) {
@@ -665,6 +667,7 @@ function draw(){
 
 
     Object.values(bots).forEach(b => {
+        if (b.retired) return;
         b.renderX = lerp(b.renderX || b.x, b.x, 0.15);
         b.renderY = lerp(b.renderY || b.y, b.y, 0.15);
         drawEntity({ ...b, x: b.renderX, y: b.renderY }, b.color, b.name, false);
