@@ -211,7 +211,7 @@ canvas { display: block; }
     pointer-events: none; z-index: 10; font-size: 14px;
 }
 #ui { left: 15px; min-width: 160px; }
-#leaderboard { right: 15px; text-align: right; min-width: 140px; pointer-events: auto;}
+#leaderboard {right: 15px; text-align: right; min-width: 140px; pointer-events: auto; max-height: 220px; overflow-y: auto;}
 
 .leaderboard-row {
     display: flex;

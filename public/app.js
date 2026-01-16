@@ -282,6 +282,8 @@ const socket = io({ transports: ['websocket'], upgrade: false });
 
             // Leaderboard update
             Object.values(s.players).forEach(p => {
+                if (p.forcedSpectator && p.score === 0) return;
+
                 leaderboardEntities[p.id] = {
                     id: p.id,
                     name: p.name,
