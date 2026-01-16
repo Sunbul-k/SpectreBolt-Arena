@@ -559,6 +559,35 @@ function drawMinimap() {
     }
 }
 
+function renderWinners() {
+    const winnerBox = document.getElementById('winnerList');
+    if (!winnerBox) return;
+
+    const all = Object.values(leaderboardEntities)
+        .filter(e => e.score > 0)
+        .sort((a, b) => b.score - a.score);
+
+    if (!all.length) {
+        winnerBox.innerHTML = `<div>No winners this round.</div>`;
+        return;
+    }
+
+    const topScore = all[0].score;
+    const winners = all.filter(p => p.score === topScore);
+
+    winnerBox.innerHTML = `
+        <div style="margin-bottom: 10px;">
+            <b>${winners.length > 1 ? 'WINNERS' : 'WINNER'}</b>
+        </div>
+        ${winners.map(w => `
+            <div>
+                ${w.name}${w.isBot ? ' 🤖' : ''} — ${w.score}
+            </div>
+        `).join('')}
+    `;
+}
+
+
 function drawCenteredText(ctx, text, yOffset = 0, lineHeight = 26) {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -693,20 +722,25 @@ function draw(){
 
     if (matchTimer <= 0) {
         document.getElementById('gameOver').style.display = 'flex';
+
+        renderWinners();
+
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.fillStyle = "#111";
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
         drawMinimap();
+
         if (me.score > personalBest) {
             personalBest = me.score;
             localStorage.setItem("personalBest", personalBest);
-            document.getElementById('score').innerHTML =`NEW PERSONAL BEST: ${me.score}`;
-        }
-        else{
+            document.getElementById('score').innerHTML = `NEW PERSONAL BEST: ${me.score}`;
+        } else {
             document.getElementById('score').innerHTML =`SCORE: ${me.score}<br>PERSONAL BEST: ${personalBest}`;
         }
         return;
     }
+
     if (Date.now() - lastMiniUpdate > 200) {
         drawMinimap();
         lastMiniUpdate = Date.now();
