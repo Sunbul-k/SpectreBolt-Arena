@@ -129,10 +129,6 @@ body {
     flex: 0 0 auto;
 }
 
-
-
-
-
 @media screen and (orientation: portrait) {
     #portrait-warning {
         display: flex !important;

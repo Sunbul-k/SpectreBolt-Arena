@@ -431,7 +431,7 @@ socket.on('RobSpawned', () => {
 socket.on('EliminatorSpawned', () => {
     const box = document.getElementById('eliminatorNotice');
     const msg = document.createElement('div');
-    msg.className = 'eliminator-msg';
+    msg.className = 'elim-msg';
     msg.textContent = 'THE ELIMINATOR HAS ENTERED THE ARENA';
 
     box.appendChild(msg);
@@ -449,7 +449,7 @@ socket.on('RobRetired', () => {
 socket.on('EliminatorRetired', () => {
     const box = document.getElementById('eliminatorNotice');
     const msg = document.createElement('div');
-    msg.className = 'eliminator-msg';
+    msg.className = 'elim-msg';
     msg.textContent = 'The Eliminator has fallen.. with no return.';
     box.appendChild(msg);
     setTimeout(() => msg.remove(), 4000);
