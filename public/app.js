@@ -104,13 +104,18 @@ window.addEventListener('load', () => {
 });
 
         
-document.getElementById('startBtn').onclick = () => {
-    requestFullScreen();
-    const name = document.getElementById('nameInput').value;
-    socket.emit('joinGame', { name: name || "Sniper" });
-    socket.emit('setAutoRematch',localStorage.getItem('autoRematch') !== 'false');
-    document.getElementById('nameScreen').style.display = 'none';
-};
+window.addEventListener('DOMContentLoaded', () => {
+    const startBtn = document.getElementById('startBtn');
+    if (!startBtn) return console.error("Start button not found!");
+
+    startBtn.onclick = () => {
+        const name = document.getElementById('nameInput').value;
+        socket.emit('joinGame', { name: name || "Sniper" });
+        socket.emit('setAutoRematch', localStorage.getItem('autoRematch') !== 'false');
+        document.getElementById('nameScreen').style.display = 'none';
+    };
+});
+
 
 document.getElementById('supportBtn').onclick = () => {
     window.open('https://github.com/Sunbul-k/SpectreBolt-Arena/discussions/','_blank');
@@ -149,7 +154,6 @@ autoRematchToggle.addEventListener('change', () => {
     localStorage.setItem('autoRematch', enabled);
     socket.emit('setAutoRematch', enabled);
 });
-
 
 const joyBase = document.getElementById('moveJoystick');
 const joyKnob = document.getElementById('moveKnob');
@@ -440,8 +444,8 @@ socket.on('state', s => {
         const top5Highlight = index < 5; // first 5 entries
         return `
         <div class="leaderboard-row" 
-             data-id="${p.id}" 
-             style="${isMe ? 'outline: 1px solid #0f4;' : ''}; ${top5Highlight ? 'background: rgba(0,255,68,0.05); font-weight: bold;' : ''}">
+            data-id="${p.id}" 
+            style="${isMe ? 'outline: 1px solid #0f4;' : ''}${top5Highlight ? ' background: rgba(0,255,68,0.05); font-weight: bold;' : ''}">
             <span class="lb-rank">${p.rank}.</span>
             <span class="lb-name">${p.name}</span>
             <span class="lb-score">${p.score} ${isMe ? '<span style="color:#0f4">[YOU]</span>' : ''}</span>
@@ -496,7 +500,7 @@ socket.on('mapUpdate', d => {    mapSize = d.mapSize;    walls = d.walls;});
 socket.on('errorMsg', (msg) => { alert(msg); document.getElementById('nameScreen').style.display = 'flex'; });
 socket.on('matchReset', () => {
     gameOverSince = null;
-    document.getElementById('gameOverNotice')?.style.display = 'none';
+    document.getElementById('gameOverNotice').style.display = 'none';
     document.getElementById('gameOver').style.display = 'none';
     leaderboardEntities = {};
     scheduleAutoRematch();
@@ -812,7 +816,7 @@ function draw(){
         ctx.font = "22px monospace";
         ctx.textAlign = "center";
 
-        const countdownText =autoRematchCountdown != null ? `AUTO REMATCH IN: ${autoRematchCountdown}s`: "Press REMATCH to play again";
+        const countdownText= autoRematchCountdown != null ? `AUTO REMATCH IN: ${autoRematchCountdown}s` : "Press  REMATCH to play again"
 
         ctx.fillText(countdownText,canvas.width / 2,canvas.height / 2 + 80);
 
