@@ -37,6 +37,8 @@ const JOIN_CUTOFF_SECONDS=5*60;
 const BULLET_LIFETIME = 1200;
 const MAX_BULLETS=60;
 const BULLET_RADIUS = 4;
+const NET_TICK_IDLE = 1000 / 10;
+const NET_TICK_ACTIVE = 1000 / 20;
 
 
 let lastNetSend = 0;
@@ -52,9 +54,9 @@ let resetScheduled = false;
 let matchStarted = false;
 let botAccumulator = 0;
 let bulletAccumulator = 0; 
-const NET_TICK_IDLE = 1000 / 10;
-const NET_TICK_ACTIVE = 1000 / 20;
 let NET_TICK = NET_TICK_IDLE;
+let matchPhase = 'running'; 
+
 
 
 
@@ -273,6 +275,7 @@ function resetMatch() {
     if (activePlayers.length === 0) {
         console.log("No active players — skipping match reset");
         matchTimer = 15 * 60;
+        io.emit('matchReset')
         return;
     }
 
@@ -595,14 +598,37 @@ setInterval(() => {
         matchTimer = Math.max(0, matchTimer - delta);
     }
 
-    if (matchTimer <= 0 && matchTimer !== -1 && !resetScheduled) {
-        matchTimer = -1;
-        resetScheduled = true;
+    if (matchTimer <= 0 && matchPhase === 'running') {
+        matchPhase = 'ended';
         setTimeout(() => {
-            resetScheduled = false;
+            matchPhase = 'resetting';
             resetMatch();
+            matchPhase = 'running';
         }, 10000);
+        if (matchTimer <= 0 && matchPhase === 'running') {
+            matchPhase = 'ended';
+
+            // Normal reset
+            setTimeout(() => {
+                if (matchPhase !== 'resetting') {
+                    matchPhase = 'resetting';
+                    resetMatch();
+                    matchPhase = 'running';
+                }
+            }, 10000);
+            // Safety fallback
+            setTimeout(() => {
+                if (matchPhase === 'ended') {
+                    console.warn("Forcing match reset (safety)");
+                    matchPhase = 'resetting';
+                    resetMatch();
+                    matchPhase = 'running';
+                }
+            }, 12000);
+        }
+
     }
+
 
 
     Object.values(players).forEach(p => {
@@ -829,7 +855,7 @@ setInterval(() => {
             slimBullets[id] = {x: b.x,y: b.y,angle: b.angle};
         }
 
-        io.emit('state', { players:slimPlayers, bots:slimBots, bullets:slimBullets, matchTimer });
+        io.emit('state', { players:slimPlayers, bots:slimBots, bullets:slimBullets, matchTimer, matchPhase });
         lastNetSend = Date.now();
     }
 }, TICK_RATE);

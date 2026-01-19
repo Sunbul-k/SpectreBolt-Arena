@@ -10,12 +10,12 @@ const ctx = canvas.getContext('2d');
 const lerp = (a, b, t) => a + (b - a) * t;
 const SHOOT_INTERVAL=100;
 const isIOS = navigator.userAgentData? navigator.userAgentData.platform === 'iOS': /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes('Macintosh') && navigator.maxTouchPoints > 1);
-
 const MAX_DIST = 50;
 const DEADZONE = 6;
 const BASE_VIEW_SIZE = 900; // world units visible across smallest screen dimension
 const AUTO_REMATCH_DELAY = 10000; // 10 seconds
 
+let gameOverSince = null;
 let leaderboardUserScrolled = false;
 let leaderboardScrollTimeout = null;
 let lastMiniUpdate = 0;
@@ -295,6 +295,43 @@ window.addEventListener('mousemove', e => {
     mouseAngle = Math.atan2(my - cy, mx - cx);
 });
 
+document.getElementById('rematchBtn').onclick = () => {
+    gameOverSince=null;
+    if (autoRematchTimeout) {
+        clearTimeout(autoRematchTimeout);
+        autoRematchTimeout = null;
+        autoRematchActive = false;
+    }
+    const me = players[myId];
+    if (me) socket.emit('joinGame', { name: me.name || "Sniper" });
+    document.getElementById('gameOver').style.display = 'none';
+};
+
+function scheduleAutoRematch() {
+    const me = players[myId];
+    const autoRematch = localStorage.getItem('autoRematch') !== 'false';
+    if (!autoRematch || !me || me.isSpectating || autoRematchActive) return;
+
+    autoRematchActive = true;
+    let remaining = AUTO_REMATCH_DELAY / 1000;
+    autoRematchCountdown = remaining;
+
+    const countdownInterval = setInterval(() => {
+        remaining -= 1;
+        autoRematchCountdown = remaining;
+        if (remaining <= 0) {
+            clearInterval(countdownInterval);
+        }
+    }, 1000);
+
+    autoRematchTimeout = setTimeout(() => {
+        socket.emit('joinGame', { name: me.name || "Sniper" });
+        autoRematchTimeout = null;
+        autoRematchActive = false;
+        autoRematchCountdown = null;
+    }, AUTO_REMATCH_DELAY);
+}
+
 const leaderboardScroll= document.getElementById('leaderboardScroll');
 
 leaderboardScroll.addEventListener('scroll', () => {
@@ -457,52 +494,11 @@ socket.on('EliminatorRetired', () => {
 });
 socket.on('mapUpdate', d => {    mapSize = d.mapSize;    walls = d.walls;});
 socket.on('errorMsg', (msg) => { alert(msg); document.getElementById('nameScreen').style.display = 'flex'; });
-
-function scheduleAutoRematch() {
-    const me = players[myId];
-    const autoRematch = localStorage.getItem('autoRematch') !== 'false';
-    if (!autoRematch || !me || me.isSpectating || autoRematchActive) return;
-
-    autoRematchActive = true;
-    let remaining = AUTO_REMATCH_DELAY / 1000;
-    autoRematchCountdown = remaining;
-
-    // Countdown interval
-    const countdownInterval = setInterval(() => {
-        remaining -= 1;
-        autoRematchCountdown = remaining;
-        if (remaining <= 0) {
-            clearInterval(countdownInterval);
-        }
-    }, 1000);
-
-    autoRematchTimeout = setTimeout(() => {
-        socket.emit('joinGame', { name: me.name || "Sniper" });
-        autoRematchTimeout = null;
-        autoRematchActive = false;
-        autoRematchCountdown = null;
-    }, AUTO_REMATCH_DELAY);
-}
-
-
-// Manual rematch clears the timeout and immediately joins
-document.getElementById('rematchBtn').onclick = () => {
-    if (autoRematchTimeout) {
-        clearTimeout(autoRematchTimeout);
-        autoRematchTimeout = null;
-        autoRematchActive = false;
-    }
-    const me = players[myId];
-    if (me) socket.emit('joinGame', { name: me.name || "Sniper" });
-    document.getElementById('gameOver').style.display = 'none';
-};
-
-// Only schedule auto-rematch once per match reset
 socket.on('matchReset', () => {
+    gameOverSince = null;
+    document.getElementById('gameOverNotice')?.style.display = 'none';
     document.getElementById('gameOver').style.display = 'none';
     leaderboardEntities = {};
-
-    // Only schedule if not already active
     scheduleAutoRematch();
 });
 
@@ -802,37 +798,48 @@ function draw(){
     document.getElementById('timer').innerText = `TIME: ${mins}:${secs}`;
 
     if (matchTimer <= 0) {
+        if (!gameOverSince) {
+            gameOverSince = Date.now();
+        }
         document.getElementById('gameOver').style.display = 'flex';
-        const countdownText = autoRematchCountdown != null? `AUTO REMATCH IN: ${autoRematchCountdown}s`: "Press REMATCH to play again";
 
-        ctx.fillStyle = "#fff";
-        ctx.font = "22px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(countdownText, canvas.width / 2, canvas.height / 2 + 80);
-
-
-        renderWinners();
-
-        const me = players[myId];
-
-
-        // Otherwise, leave the player on Game Over screen
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.fillStyle = "#111";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw countdown text
+        ctx.fillStyle = "#fff";
+        ctx.font = "22px monospace";
+        ctx.textAlign = "center";
+
+        const countdownText =autoRematchCountdown != null ? `AUTO REMATCH IN: ${autoRematchCountdown}s`: "Press REMATCH to play again";
+
+        ctx.fillText(countdownText,canvas.width / 2,canvas.height / 2 + 80);
+
+        renderWinners();
         drawMinimap();
 
-        if (me && me.score > personalBest) {
-            personalBest = me.score;
-            localStorage.setItem("personalBest", personalBest);
-            document.getElementById('score').innerHTML = `NEW PERSONAL BEST: ${me.score}`;
-        } else if (me) {
-            document.getElementById('score').innerHTML = `SCORE: ${me.score}<br>PERSONAL BEST: ${personalBest}`;
+        const me = players[myId];
+        if (me) {
+            if (me.score > personalBest) {
+                personalBest = me.score;
+                localStorage.setItem("personalBest", personalBest);
+                document.getElementById('score').innerHTML =`NEW PERSONAL BEST: ${me.score}`;
+            } else {
+                document.getElementById('score').innerHTML =`SCORE: ${me.score}<br>PERSONAL BEST: ${personalBest}`;
+            }
+        }
+        if (gameOverSince && Date.now() - gameOverSince > 15000) {
+            const notice = document.getElementById('gameOverNotice');
+            if (notice) {
+                notice.innerText = "Connection stalled. You may safely press REMATCH.";
+                notice.style.display = 'block';
+            }
         }
 
-        return; 
-    }
 
+        return;
+    }
 
     if (Date.now() - lastMiniUpdate > 200) {
         drawMinimap();
