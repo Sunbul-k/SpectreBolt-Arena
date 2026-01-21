@@ -13,10 +13,9 @@ const isIOS = navigator.userAgentData? navigator.userAgentData.platform === 'iOS
 const MAX_DIST = 50;
 const DEADZONE = 6;
 const BASE_VIEW_SIZE = 900; // world units visible across smallest screen dimension
+const leaderboardScroll= document.getElementById('leaderboardScroll');
 
 let gameOverSince = null;
-let leaderboardUserScrolled = false;
-let leaderboardScrollTimeout = null;
 let lastMiniUpdate = 0;
 let myId, mapSize, walls = [];
 let players = {}, bots = {}, bullets = {}, matchTimer = 1200;
@@ -35,14 +34,77 @@ let lastSpaceShot = 0;
 let leaderboardEntities = {}; 
 let isRematching = false;
         
+function isHandheldLike() {
+    const mq = window.matchMedia;
 
-        
+    const coarsePointer = mq('(pointer: coarse)').matches;
+    const finePointer   = mq('(pointer: fine)').matches;
+    const hoverNone     = mq('(hover: none)').matches;
+
+    const smallScreen = Math.min(window.screen.width, window.screen.height) < 900;
+    const hasKeyboard = navigator.keyboard !== undefined || matchMedia('(any-pointer: fine)').matches;
+
+    return (coarsePointer &&!finePointer &&hoverNone &&(smallScreen || !hasKeyboard));
+}
+
+let cachedHandheld = null;
+
+function isHandheldLikeCached() {
+    if (cachedHandheld !== null) return cachedHandheld;
+    cachedHandheld = isHandheldLike();
+    return cachedHandheld;
+}
+
+function isStandaloneMode() {
+    return (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
+}
+
+function isPortrait() {
+    return window.innerHeight > window.innerWidth;
+}
+
+function updateUXWarnings() {
+    const homepageWarning = document.getElementById('homepage-warning');
+    const portraitWarning = document.getElementById('portrait-warning');
+    const inGame = !!players?.[myId];
+
+    if (!homepageWarning || !portraitWarning) return;
+
+    homepageWarning.style.display = 'none';
+    portraitWarning.style.display = 'none';
+
+    if (inGame) return;
+
+    const standalone = isStandaloneMode();
+    const portrait = isPortrait();
+    const handheld = isHandheldLikeCached();
+
+    if (handheld && !standalone) {
+        homepageWarning.style.display = 'block';
+        return;
+    }
+
+    if (handheld && standalone && portrait) {
+        portraitWarning.style.display = 'block';
+    }
+}
+
+
+window.addEventListener('DOMContentLoaded', updateUXWarnings);
+window.addEventListener('resize', updateUXWarnings);
+window.addEventListener('orientationchange', updateUXWarnings);
+
+window.addEventListener('resize', () => cachedHandheld = null);
+
+if (window.matchMedia) {
+    window.matchMedia('(display-mode: standalone)').addEventListener('change', updateUXWarnings);
+}
+
+ 
 if ('ontouchstart' in window) {
     document.getElementById('shootJoystick').style.display = 'block';
     document.getElementById('moveJoystick').style.display='block';
 }
-
-
 
 async function requestFullScreen() {
     const el = document.documentElement;
@@ -55,14 +117,11 @@ async function requestFullScreen() {
     } catch (err) { console.log(err); }
 }
 
-let cssWidth = 0;
-let cssHeight = 0;
-
 function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
 
-    cssWidth = window.visualViewport?.width || window.innerWidth;
-    cssHeight = window.visualViewport?.height || window.innerHeight;
+    const cssWidth = window.visualViewport?.width || window.innerWidth;
+    const cssHeight = window.visualViewport?.height || window.innerHeight;
 
     canvas.width = Math.round(cssWidth * dpr);
     canvas.height = Math.round(cssHeight * dpr);
@@ -100,7 +159,8 @@ window.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('startBtn');
     if (!startBtn) return console.error("Start button not found!");
 
-    startBtn.onclick = () => {
+    startBtn.onclick = async () => {
+        await requestFullScreen();
         const name = document.getElementById('nameInput').value;
         socket.emit('joinGame', { name: name || "Sniper" });
         document.getElementById('nameScreen').style.display = 'none';
@@ -276,28 +336,6 @@ window.addEventListener('mousemove', e => {
     const my = e.clientY - rect.top;
 
     mouseAngle = Math.atan2(my - cy, mx - cx);
-});
-
-document.getElementById('rematchBtn').onclick = () => {
-    gameOverSince = null;
-    isRematching = true;
-
-    leaderboardEntities = {}; // prevent winners re-render
-    document.getElementById('gameOver').style.display = 'none';
-
-    const me = players[myId];
-    if (me) socket.emit('joinGame', { name: me.name || "Sniper" });
-};
-
-
-const leaderboardScroll= document.getElementById('leaderboardScroll');
-
-leaderboardScroll.addEventListener('scroll', () => {
-    leaderboardUserScrolled = true;
-    clearTimeout(leaderboardScrollTimeout);
-    leaderboardScrollTimeout = setTimeout(() => {
-        leaderboardUserScrolled = false;
-    }, 3000);
 });
 
 socket.on('init', d => {

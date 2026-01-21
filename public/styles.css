@@ -30,7 +30,7 @@ html, body {
         --sprint: #0cf;
 }
 
-#homepage-warning {
+#homepage-warning, #portrait-warning {
     display: none; 
     position: fixed; 
     inset: 0; 
@@ -103,7 +103,7 @@ body {
 }
 
 @media screen and (orientation: portrait) {
-    #homepage-warning {
+    #homepage-warning, #portrait-warning {
         display: flex !important;
     }
 }
