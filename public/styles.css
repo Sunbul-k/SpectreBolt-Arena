@@ -318,6 +318,7 @@ canvas { display: block; }
 #mobileControls {
     display: none; position: fixed; inset: 0; z-index: 500; pointer-events: none;
 }
+
 @media (pointer: coarse) { #mobileControls { display: block; } }
 
 .joystick-base {

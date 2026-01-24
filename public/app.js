@@ -55,9 +55,18 @@ function isHandheldLikeCached() {
     return cachedHandheld;
 }
 
-function isStandaloneMode() {
-    return (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
+let cachedStandalone = null;
+
+function isStandaloneModeCached() {
+    if (cachedStandalone !== null) return cachedStandalone;
+
+    cachedStandalone =
+        window.navigator.standalone === true ||
+        window.matchMedia('(display-mode: standalone)').matches;
+
+    return cachedStandalone;
 }
+
 
 function isPortrait() {
     return window.innerHeight > window.innerWidth;
@@ -75,9 +84,9 @@ function updateUXWarnings() {
 
     if (inGame) return;
 
-    const standalone = isStandaloneMode();
-    const portrait = isPortrait();
     const handheld = isHandheldLikeCached();
+    const standalone = isStandaloneModeCached();
+    const portrait = isPortrait();
 
     if (handheld && !standalone) {
         homepageWarning.style.display = 'block';
@@ -96,9 +105,14 @@ window.addEventListener('orientationchange', updateUXWarnings);
 
 window.addEventListener('resize', () => cachedHandheld = null);
 
-if (window.matchMedia) {
-    window.matchMedia('(display-mode: standalone)').addEventListener('change', updateUXWarnings);
-}
+const standaloneMQ = window.matchMedia('(display-mode: standalone)');
+
+standaloneMQ.addEventListener('change', () => {
+    cachedStandalone = null;
+    updateUXWarnings();
+});
+
+
 
  
 if ('ontouchstart' in window) {
@@ -166,11 +180,6 @@ window.addEventListener('DOMContentLoaded', () => {
         document.getElementById('nameScreen').style.display = 'none';
     };
 });
-
-
-document.getElementById('supportBtn').onclick = () => {
-    window.open('https://github.com/Sunbul-k/SpectreBolt-Arena/discussions/','_blank');
-};
 
 canvas.addEventListener('click', () => {
     if (!players[myId]) {
@@ -309,7 +318,7 @@ document.getElementById('sprintBtn').addEventListener('touchstart', (e) => { e.p
 document.getElementById('sprintBtn').addEventListener('touchend', (e) => { e.preventDefault(); isMobileSprinting = false; });            
 
 window.addEventListener('keydown', e => {
-    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight","Space"].includes(e.key)) {
         e.preventDefault();
     }
 
@@ -379,7 +388,7 @@ socket.on('rematchAccepted', (data) => {
         forcedSpectator: false,
         spawnProtected: true,
         name: me.name || "Sniper",
-        color: me.color || null
+        color: data.color || me.color || null
     };
 
     camX = players[myId].x;
@@ -839,12 +848,11 @@ function draw(){
         ctx.fillStyle = "#111";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Draw rematch text
         ctx.fillStyle = "#fff";
         ctx.font = "22px monospace";
         ctx.textAlign = "center";
 
-        const rematchText= "Press  REMATCH to play again"
+        const rematchText= "Press REMATCH to play again"
 
         ctx.fillText(rematchText,canvas.width / 2,canvas.height / 2 + 80);
 
@@ -880,6 +888,7 @@ function draw(){
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
+
 let howToMode = 'mobile';
 
 function openHowTo() {

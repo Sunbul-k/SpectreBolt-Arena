@@ -169,6 +169,7 @@ function getSafeSpawn() {
     } while (collidesWithWall(x, y, SPAWN_BUFFER) && attempts < 100);
     return { x, y };
 }
+
 const USED_COLORS = new Set();
 
 function generateUniqueColor() {
@@ -192,15 +193,15 @@ function shouldRespawnBot(botId) {
     if (matchTimer <= 0) return false;
     if (botId === 'bot_rob') return Math.random() < 0.75;
     if (botId === 'bot_eliminator') return Math.random() < 0.5;
-    return true; // Bobby always respawns
+    return true;
 }
 
 let specialsSpawned = false;
 
 function spawnSpecialBots() {
     if (specialsSpawned) return;
-    delete bots['bot_rob'];
-    delete bots['bot_eliminator'];
+    if (bots['bot_rob']) delete bots['bot_rob'];
+    if (bots['bot_eliminator']) delete bots['bot_eliminator'];
     specialsSpawned = true;
 
     setTimeout(() => {
@@ -235,29 +236,36 @@ function handleSuccessfulJoin(socket, name, forcedSpectator = false, waitingForR
     players[socket.id] = {
         id: socket.id,
         name: name,
-        x: pos.x, y: pos.y, hp: 100, lives: 3, score: 0, stamina: 100,
-        angle: 0, color: generateUniqueColor(),
+        x: pos.x, 
+        y: pos.y, 
+        hp: 100, 
+        lives: 3, 
+        score: 0, 
+        stamina: 100,
+        angle: 0, 
+        color: generateUniqueColor(),
         isSpectating: forcedSpectator, 
         forcedSpectator,
         spawnProtectedUntil: Date.now() + 3000,
         lastRegenTime: Date.now(),
         damageTakenMultiplier: 1,
         lastFireTime: 0,
-        fireCooldown: 100, // ms (10 shots/sec)
+        fireCooldown: 100, 
         input: {moveX: 0,moveY: 0,sprint: false,angle: 0},
         waitingForRematch,
     };
-    
-    spawnSpecialBots();
+
     socket.emit('init', { id: socket.id, mapSize: MAP_SIZE, walls, spawnX: pos.x, spawnY: pos.y,name, forcedSpectator, waitingForRematch});
 
+    
+    spawnSpecialBots();
 }
 
 function maybeResetMatch() {
     if (matchPhase === 'ended' && resetPending) {
         resetPending = false;
         resetMatch();
-        return true; // reset happened
+        return true; 
     }
     return false;
 }
@@ -267,8 +275,15 @@ function resetMatch() {
     if (matchPhase === 'running') return;
     resetPending=false;
     matchTimer = 15 * 60;
+    USED_COLORS.clear();
     bullets = {};
+
+    bots = {};
+    bots['bot_bobby'] = new Bot('bot_bobby', 'Bobby', '#8A9A5B', 3.1, 800);
+    bots['bot_bobby'].damageTakenMultiplier = 1.35;
+
     walls = generateWalls(12);
+
     specialsSpawned = false;
     spawnSpecialBots();
     
@@ -293,6 +308,7 @@ function resetMatch() {
                 damageTakenMultiplier: 1,
                 lastFireTime: 0,
                 fireCooldown: 100,
+                justDied:false,
             });
         }
     });
@@ -320,11 +336,17 @@ function resetMatch() {
 
 class Bot {
     constructor(id, name, color, speed, bulletSpeed) {
-        this.id = id; this.name = name; this.color = color;
-        this.speed = speed; this.bulletSpeed = bulletSpeed;
+        this.id = id; 
+        this.name = name; 
+        this.color = color;
+        this.speed = speed; 
+        this.bulletSpeed = bulletSpeed;
         const pos = getBotSafeSpawn();
-        this.x = pos.x; this.y = pos.y;
-        this.hp = 100; this.score = 0; this.angle = 0;
+        this.x = pos.x; 
+        this.y = pos.y;
+        this.hp = 100; 
+        this.score = 0; 
+        this.angle = 0;
         this.wanderAngle = Math.random() * Math.PI * 2;
         this.lastFireTime = 0;
         this.lastRegenTime = Date.now();
@@ -337,11 +359,7 @@ class Bot {
     }
 
     fireAtPlayers(players) {
-        if (collidesWithWall(
-            this.x + Math.cos(this.angle) * 30,
-            this.y + Math.sin(this.angle) * 30,
-            6
-        )) return;
+        if (collidesWithWall(this.x + Math.cos(this.angle) * 30, this.y + Math.sin(this.angle) * 30, 6)) return;
 
         if (Date.now() - this.spawnTime < 1200) return;
         if (Object.keys(bullets).length > MAX_BULLETS) return;
@@ -581,8 +599,8 @@ io.on('connection', socket => {
         }
 
         const pos = getSafeSpawn();
-        Object.assign(p, {x: pos.x, y: pos.y, hp: 100, lives: 3, stamina: 100, score: 0, isSpectating: false, forcedSpectator: false, waitingForRematch: false, spawnProtectedUntil: Date.now() + 3000,lastRegenTime:Date.now()});
-        socket.emit('rematchAccepted', { x: p.x, y: p.y, matchTimer, matchPhase });
+        Object.assign(p, {x: pos.x, y: pos.y, hp: 100, lives: 3, stamina: 100, score: 0, isSpectating: false, forcedSpectator: false, waitingForRematch: false, spawnProtectedUntil: Date.now() + 3000,lastRegenTime:Date.now(), justDied:false,color:generateUniqueColor()});
+        socket.emit('rematchAccepted', { x: p.x, y: p.y, matchTimer, matchPhase,color:p.color });
     });
 });
 
@@ -612,9 +630,6 @@ setInterval(() => {
         resetPending = true;
     }
 
-
-
-
     Object.values(players).forEach(p => {
         if (p.waitingForRematch) return;
         if (!p.isSpectating && Date.now() - p.lastRegenTime > 3000) {
@@ -622,12 +637,8 @@ setInterval(() => {
             p.lastRegenTime = Date.now();
         }
         
-
-        
         const input = p.input || {sprint:false};
         let speed = p.isSpectating ? 15 : (p.input.sprint && p.stamina > 0? SPRINT_SPEED: BASE_SPEED);
-
-
 
         let dx = input.moveX || 0;
         let dy = input.moveY || 0;
@@ -650,7 +661,6 @@ setInterval(() => {
         if (dx || dy) {
             const len = Math.hypot(dx, dy);
 
-    
             if (len > 1) {
                 dx /= len;
                 dy /= len;
@@ -666,7 +676,6 @@ setInterval(() => {
                 p.y = ny;
             }
         }
-
         p.angle = p.input.angle;
     });
     botAccumulator += delta;
@@ -693,11 +702,7 @@ setInterval(() => {
             b.x += Math.cos(b.angle) * b.speed * bulletStep;
             b.y += Math.sin(b.angle) * b.speed * bulletStep;
 
-            if (
-                collidesWithWall(b.x, b.y, BULLET_RADIUS) ||
-                b.x < 0 || b.x > MAP_SIZE ||
-                b.y < 0 || b.y > MAP_SIZE
-            ) {
+            if (collidesWithWall(b.x, b.y, BULLET_RADIUS) || b.x < 0 || b.x > MAP_SIZE || b.y < 0 || b.y > MAP_SIZE) {
                 delete bullets[b.id];
                 return;
             }
@@ -708,13 +713,7 @@ setInterval(() => {
             const liveBots = Object.values(bots).filter(b => !b.retired);
             for (const target of [...livePlayers, ...liveBots]) {
                 if (Math.abs(target.x - b.x) > 40 || Math.abs(target.y - b.y) > 40) continue;
-                if (
-                    hit ||
-                    target.id === b.owner ||
-                    target.isSpectating ||
-                    Date.now() < target.spawnProtectedUntil ||
-                    target.retired
-                ) continue;
+                if (hit ||target.id === b.owner ||target.isSpectating ||Date.now() < target.spawnProtectedUntil || target.retired || target.hp<=0) continue;
 
                 const dx = b.x - target.x;
                 const dy = b.y - target.y;
@@ -750,7 +749,7 @@ setInterval(() => {
                     }
 
                     target.hp -= damage * multiplier;
-
+                    target.hp = Math.max(0, target.hp);
 
                     target.lastRegenTime = Date.now();
 
