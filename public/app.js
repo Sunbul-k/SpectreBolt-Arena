@@ -198,148 +198,150 @@ function clampLeaderboardToTop5() {
 
 window.addEventListener('resize', clampLeaderboardToTop5);
 
-const joyBase = document.getElementById('moveJoystick');
-const joyKnob = document.getElementById('moveKnob');
+window.addEventListener('DOMContentLoaded', ()=>{
+    const joyBase = document.getElementById('moveJoystick');
+    const joyKnob = document.getElementById('moveKnob');
 
-joyBase.addEventListener('touchstart', e => {
-    const t = e.changedTouches[0];
-    joy.active = true;
-    joy.id = t.identifier;
+    joyBase.addEventListener('touchstart', e => {
+        const t = e.changedTouches[0];
+        joy.active = true;
+        joy.id = t.identifier;
 
-    joy.startX = t.clientX;
-    joy.startY = t.clientY;
-
-    joyKnob.style.transform = "translate(0,0)";
-    e.preventDefault();
-}, { passive: false });
-
-
-joyBase.addEventListener('touchmove', e => {
-    for (const t of e.changedTouches) {
-        if (t.identifier !== joy.id) continue;
-
-        let dx = t.clientX - joy.startX;
-        let dy = t.clientY - joy.startY;
-
-        const dist = Math.hypot(dx, dy);
-        const clamped = Math.min(dist, MAX_DIST);
-        const angle = Math.atan2(dy, dx);
-
-        if (dist < DEADZONE) {
-            joy.x = 0;
-            joy.y = 0;
-            joyKnob.style.transform = "translate(0,0)";
-            return;
-        }
-        joy.x = Math.cos(angle) * (clamped / MAX_DIST);
-        joy.y = Math.sin(angle) * Math.min(1, clamped / MAX_DIST);
-
-        joyKnob.style.transform =`translate(${joy.x * MAX_DIST}px, ${joy.y * MAX_DIST}px)`;
-
-        e.preventDefault();
-    }
-}, { passive: false });
-
-
-joyBase.addEventListener('touchend', e => {
-    for (const t of e.changedTouches) {
-        if (t.identifier !== joy.id) continue;
-
-        joy.active = false;
-        joy.id = null;
-        joy.x = 0;
-        joy.y = 0;
+        joy.startX = t.clientX;
+        joy.startY = t.clientY;
 
         joyKnob.style.transform = "translate(0,0)";
-    }
-}, { passive: false });
+        e.preventDefault();
+    }, { passive: false });
 
-const shootBase = document.getElementById('shootJoystick');
-const shootKnob = document.getElementById('shootKnob');
 
-shootBase.addEventListener('touchstart', e => {
-    const t = e.changedTouches[0];
-    shootJoy.active = true;
-    shootJoy.id = t.identifier;
-    shootKnob.style.transform = "translate(0,0)";
-    e.preventDefault();
-}, { passive: false });
+    joyBase.addEventListener('touchmove', e => {
+        for (const t of e.changedTouches) {
+            if (t.identifier !== joy.id) continue;
 
-shootBase.addEventListener('touchmove', e => {
-    for (const t of e.changedTouches) {
-        if (t.identifier !== shootJoy.id) continue;
+            let dx = t.clientX - joy.startX;
+            let dy = t.clientY - joy.startY;
 
-        const rect = shootBase.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
+            const dist = Math.hypot(dx, dy);
+            const clamped = Math.min(dist, MAX_DIST);
+            const angle = Math.atan2(dy, dx);
 
-        const dx = t.clientX - cx;
-        const dy = t.clientY - cy;
+            if (dist < DEADZONE) {
+                joy.x = 0;
+                joy.y = 0;
+                joyKnob.style.transform = "translate(0,0)";
+                return;
+            }
+            joy.x = Math.cos(angle) * (clamped / MAX_DIST);
+            joy.y = Math.sin(angle) * Math.min(1, clamped / MAX_DIST);
 
-        const dist = Math.hypot(dx, dy);
-        const clamped = Math.min(dist, MAX_DIST);
+            joyKnob.style.transform =`translate(${joy.x * MAX_DIST}px, ${joy.y * MAX_DIST}px)`;
 
-        if (dist < DEADZONE) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+
+    joyBase.addEventListener('touchend', e => {
+        for (const t of e.changedTouches) {
+            if (t.identifier !== joy.id) continue;
+
+            joy.active = false;
+            joy.id = null;
+            joy.x = 0;
+            joy.y = 0;
+
+            joyKnob.style.transform = "translate(0,0)";
+        }
+    }, { passive: false });
+
+    const shootBase = document.getElementById('shootJoystick');
+    const shootKnob = document.getElementById('shootKnob');
+
+    shootBase.addEventListener('touchstart', e => {
+        const t = e.changedTouches[0];
+        shootJoy.active = true;
+        shootJoy.id = t.identifier;
+        shootKnob.style.transform = "translate(0,0)";
+        e.preventDefault();
+    }, { passive: false });
+
+    shootBase.addEventListener('touchmove', e => {
+        for (const t of e.changedTouches) {
+            if (t.identifier !== shootJoy.id) continue;
+
+            const rect = shootBase.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+
+            const dx = t.clientX - cx;
+            const dy = t.clientY - cy;
+
+            const dist = Math.hypot(dx, dy);
+            const clamped = Math.min(dist, MAX_DIST);
+
+            if (dist < DEADZONE) {
+                shootJoy.x = 0;
+                shootJoy.y = 0;
+                shootKnob.style.transform = "translate(0,0)";
+                return;
+            }
+
+            shootJoy.x = dx / dist;
+            shootJoy.y = dy / dist;
+
+            mouseAngle = Math.atan2(shootJoy.y, shootJoy.x);
+
+            shootKnob.style.transform =`translate(${shootJoy.x * clamped}px, ${shootJoy.y * clamped}px)`;
+
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+
+    shootBase.addEventListener('touchend', e => {
+        for (const t of e.changedTouches) {
+            if (t.identifier !== shootJoy.id) continue;
+
+            shootJoy.active = false;
+            shootJoy.id = null;
             shootJoy.x = 0;
             shootJoy.y = 0;
             shootKnob.style.transform = "translate(0,0)";
-            return;
+        }
+    }, { passive: false });
+    document.getElementById('sprintBtn').addEventListener('touchstart', (e) => { e.preventDefault(); isMobileSprinting = true; });
+    document.getElementById('sprintBtn').addEventListener('touchend', (e) => { e.preventDefault(); isMobileSprinting = false; });            
+
+    window.addEventListener('keydown', e => {
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight","Space"].includes(e.key)) {
+            e.preventDefault();
         }
 
-        shootJoy.x = dx / dist;
-        shootJoy.y = dy / dist;
+        keys[e.code] = true;
 
-        mouseAngle = Math.atan2(shootJoy.y, shootJoy.x);
+        if (e.code === 'Space') {
+            spaceHeld = true;
+        }
+    });
 
-        shootKnob.style.transform =`translate(${shootJoy.x * clamped}px, ${shootJoy.y * clamped}px)`;
+    window.addEventListener('keyup', e => {
+        keys[e.code] = false;
+        if (e.code === 'Space') spaceHeld = false;
+    });
 
-        e.preventDefault();
-    }
-}, { passive: false });
+    window.addEventListener('mousemove', e => {
+        if (joy.active) return;
 
+        const rect = canvas.getBoundingClientRect();
+        const cx = rect.width / 2;
+        const cy = rect.height / 2;
 
-shootBase.addEventListener('touchend', e => {
-    for (const t of e.changedTouches) {
-        if (t.identifier !== shootJoy.id) continue;
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
 
-        shootJoy.active = false;
-        shootJoy.id = null;
-        shootJoy.x = 0;
-        shootJoy.y = 0;
-        shootKnob.style.transform = "translate(0,0)";
-    }
-}, { passive: false });
-document.getElementById('sprintBtn').addEventListener('touchstart', (e) => { e.preventDefault(); isMobileSprinting = true; });
-document.getElementById('sprintBtn').addEventListener('touchend', (e) => { e.preventDefault(); isMobileSprinting = false; });            
-
-window.addEventListener('keydown', e => {
-    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight","Space"].includes(e.key)) {
-        e.preventDefault();
-    }
-
-    keys[e.code] = true;
-
-    if (e.code === 'Space') {
-        spaceHeld = true;
-    }
-});
-
-window.addEventListener('keyup', e => {
-    keys[e.code] = false;
-    if (e.code === 'Space') spaceHeld = false;
-});
-
-window.addEventListener('mousemove', e => {
-    if (joy.active) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const cx = rect.width / 2;
-    const cy = rect.height / 2;
-
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-
-    mouseAngle = Math.atan2(my - cy, mx - cx);
+        mouseAngle = Math.atan2(my - cy, mx - cx);
+    });
 });
 
 socket.on('init', d => {
@@ -744,7 +746,7 @@ function draw(){
         ctx.fillStyle = "#f44";
         ctx.font = "20px monospace";
         ctx.globalAlpha = 0.8 + Math.sin(Date.now() / 400) * 0.2;
-        drawCenteredText(ctx,"Black screen?\nTap here to report a bug, or refresh if ",20);
+        drawCenteredText(ctx,"Black screen?\nTap here to report a bug ",20);
 
         ctx.globalAlpha = 1;
         return;

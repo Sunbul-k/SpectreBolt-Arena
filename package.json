@@ -1,7 +1,7 @@
 {
   "name": "spectrebolt-arena",
   "version": "1.0.0",
-  "description": "A real-time multiplayer 2D shooter game built with Node.js and Socket.io",
+  "description": "A real-time, online multiplayer 2D top-down shooter game built with Node.js and Socket.io",
   "keywords": [
     "multiplayer",
     "2d-shooter",
@@ -9,7 +9,10 @@
     "html5-canvas",
     "game-development",
     "real-time",
-    "shooter-game"
+    "shooter-game",
+    "spectrebolt",
+    "spectrebolt-arena",
+    "online"
   ],
   "homepage": "https://github.com/Sunbul-k/Spectrebolt-Arena#readme",
   "bugs": {

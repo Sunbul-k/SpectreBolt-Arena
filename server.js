@@ -198,29 +198,28 @@ let specialsSpawned = {
     eliminator: false
 };
 
+let specialsSpawnTimeout = null;
+
 function spawnSpecialBots() {
-    setTimeout(()=>{
+    if (specialsSpawnTimeout) return; 
+    specialsSpawnTimeout = setTimeout(() => {
         if (!specialsSpawned.rob && !bots['bot_rob'] && Math.random() < 0.75) {
             specialsSpawned.rob = true;
             const rob = new Bot('bot_rob', 'Rob', '#4A90E2', BASE_SPEED, 950);
             rob.damageTakenMultiplier = 0.75;
-            rob.hp = 100;
             bots['bot_rob'] = rob;
-
             io.emit('RobSpawned', {id: 'bot_rob', name: 'Rob', timestamp: Date.now()});
         }
-
         if (!specialsSpawned.eliminator && !bots['bot_eliminator'] && Math.random() < 0.25) {
             specialsSpawned.eliminator = true;
-
             const elim = new Bot('bot_eliminator', 'Eliminator', '#E24A4A', 3.9, 1100);
             elim.isRetreating = false;
             elim.damageTakenMultiplier = 0.4;
             bots['bot_eliminator'] = elim;
-
             io.emit('EliminatorSpawned', {id: 'bot_eliminator', name: 'Eliminator', timestamp: Date.now()});
         }
-    },5000);
+        specialsSpawnTimeout = null;
+    }, 5000);
 }
 
 app.set('trust proxy', true);
@@ -258,7 +257,6 @@ function handleSuccessfulJoin(socket, name, forcedSpectator = false, waitingForR
     };
 
     socket.emit('init', { id: socket.id, mapSize: MAP_SIZE, walls, spawnX: pos.x, spawnY: pos.y,name, forcedSpectator, waitingForRematch,color:players[socket.id].color});
-    spawnSpecialBots();
 }
 
 function maybeResetMatch() {
@@ -287,6 +285,7 @@ function resetMatch() {
 
     specialsSpawned.eliminator = false;
     specialsSpawned.rob=false;
+    specialsSpawnTimeout=null;
     spawnSpecialBots();
     
     Object.values(players).forEach(p => {
@@ -437,10 +436,8 @@ class Bot {
 
         this.fireAtPlayers(players);
     }
-    updateAdvanced(players, bulletsList={}) {
+    updateAdvanced(players) {
         const now = Date.now();
-        const aggressive = now < this.reengageUntil;
-
         if (now - this.lastRegenTime > 3000) {
             const regen = this.isRetreating ? 2 : 5;
             this.hp = Math.min(100, this.hp + regen);
@@ -455,33 +452,17 @@ class Bot {
             moveSpeed *= 1.25;
 
             const targets = Object.values(players).filter(p => !p.isSpectating);
-
-            let preferred = null;
-            if (this.lastAggressorId && Date.now() - this.lastAggressorTime < 6000) {
-                preferred = targets.find(p => p.id === this.lastAggressorId);
-            }
-
             if (targets.length) {
-                const nearest = preferred || targets.reduce((a, b) =>
+                const nearest = targets.reduce((a, b) =>
                     Math.hypot(a.x - this.x, a.y - this.y) <
                     Math.hypot(b.x - this.x, b.y - this.y) ? a : b
                 );
 
                 const angleToPlayer = Math.atan2(nearest.y - this.y, nearest.x - this.x);
-                const dist = Math.hypot(nearest.x - this.x, nearest.y - this.y);
-                const leadTime = dist / this.bulletSpeed;
-                const px = nearest.x + (nearest.input?.moveX || 0) * 4 * leadTime;
-                const py = nearest.y + (nearest.input?.moveY || 0) * 4 * leadTime;
-
-                this.angle = Math.atan2(py - this.y, px - this.x);
-
+                this.angle = angleToPlayer + Math.PI;
 
                 const distToPlayer = Math.hypot(nearest.x - this.x, nearest.y - this.y);
-                const angleDiff = Math.abs(Math.atan2(
-                    Math.sin(this.angle - angleToPlayer),
-                    Math.cos(this.angle - angleToPlayer)
-                ));
-
+                const angleDiff = Math.abs(this.angle - angleToPlayer);
                 if (!this.hasFiredWhileRetreating && distToPlayer < 400 && angleDiff > Math.PI / 2) {
                     const id = 'bot_b' + (++bulletIdCounter);
                     bullets[id] = {
@@ -495,36 +476,7 @@ class Bot {
                     };
                     this.hasFiredWhileRetreating = true;
                 }
-
-                const chasingHard = distToPlayer < 250 && angleDiff > Math.PI * 0.75;
-
-                if (!this.fakeRetreatUsed && chasingHard && Math.random() < 0.6) {
-                    for (let i = 0; i < 3; i++) {
-                        const id = 'bot_b' + (++bulletIdCounter);
-                        bullets[id] = {
-                            id,
-                            x: this.x,
-                            y: this.y,
-                            angle: angleToPlayer + (Math.random() - 0.5) * 0.12,
-                            owner: this.id,
-                            speed: this.bulletSpeed / 60,
-                            born: now
-                        };
-                    }
-                    this.fakeRetreatUsed = true;
-                }
             }
-
-            if (!this.isRetreating && aggressive && targets.length) {
-                const target = targets.reduce((a, b) =>
-                    Math.hypot(a.x - this.x, a.y - this.y) <
-                    Math.hypot(b.x - this.x, b.y - this.y) ? a : b
-                );
-
-                this.angle = Math.atan2(target.y - this.y, target.x - this.x);
-                moveSpeed *= 1.15;
-            }
-
             const lookahead = 40; 
             let nx = this.x + Math.cos(this.angle) * moveSpeed;
             let ny = this.y + Math.sin(this.angle) * moveSpeed;
@@ -537,54 +489,12 @@ class Bot {
                 attempts++;
             }
 
-            bulletsList.forEach(b => {
-                const dist = Math.hypot(b.x - this.x, b.y - this.y);
-                if (b.owner !== this.id && dist < 150) {
-                    const futureX = b.x + Math.cos(b.angle) * b.speed * 2;
-                    const futureY = b.y + Math.sin(b.angle) * b.speed * 2;
-
-                    const angleToBullet = Math.atan2(futureY - this.y, futureX - this.x);
-
-                    const dodgeOptions = [
-                        angleToBullet + Math.PI / 2,
-                        angleToBullet - Math.PI / 2  
-                    ];
-
-                    let bestDodge = null;
-                    let maxDist = -Infinity;
-
-                    for (const dodge of dodgeOptions) {
-                        const testX = nx + Math.cos(dodge) * 1.5;
-                        const testY = ny + Math.sin(dodge) * 1.5;
-
-                        if (!collidesWithWall(testX, testY, ENTITY_RADIUS)) {
-                            const futureDist = Math.hypot(futureX - testX, futureY - testY);
-                            if (futureDist > maxDist) {
-                                maxDist = futureDist;
-                                bestDodge = dodge;
-                            }
-                        }
-                    }
-                    if (bestDodge !== null) {
-                        nx += Math.cos(bestDodge) * 1.5;
-                        ny += Math.sin(bestDodge) * 1.5;
-                    }
-                }
-            });
-
             this.x = nx;
             this.y = ny;
-
-            if (collidesWithWall(this.x, this.y, ENTITY_RADIUS + 4)) {
-                this.angle += Math.PI / 2;
-            }
-
 
             if (this.hp >= 70) {
                 this.isRetreating = false;
                 this.hasFiredWhileRetreating = false;
-                this.fakeRetreatUsed=false;
-                this.reengageUntil = now + 2500;
             }
 
             return;
@@ -604,13 +514,9 @@ class Bot {
         } else {
             this.wanderAngle += Math.PI;
         }
-
         this.fireAtPlayers(players);
     }
 }
-
-bots['bot_bobby'] = new Bot('bot_bobby', 'Bobby', '#8A9A5B', 3.1, 800);
-bots['bot_bobby'].damageTakenMultiplier = 1.35;
 
 io.on('connection', socket => {
     socket.on('joinGame', (data) => {
@@ -664,7 +570,11 @@ io.on('connection', socket => {
         } else if (matchTimer <= JOIN_CUTOFF_SECONDS) {
             forcedSpectator = true;
         }
-        
+        if (!Object.keys(players).length && Object.keys(bots).length === 0) {
+            bots['bot_bobby'] = new Bot('bot_bobby', 'Bobby', '#8A9A5B', 3.1, 800);
+            bots['bot_bobby'].damageTakenMultiplier = 1.35;
+            spawnSpecialBots();
+        }
 
         handleSuccessfulJoin(socket, name, forcedSpectator, waitingForRematch);
         console.log(`${players[socket.id].name} has joined the arena`)
@@ -756,30 +666,33 @@ setInterval(() => {
         }
     }
 
-    const activePlayersArray = Object.values(players).filter(p => !p.isSpectating);
-    NET_TICK = activePlayersArray ? NET_TICK_ACTIVE : NET_TICK_IDLE;
-
     const now = Date.now();
     const delta = Math.min((now - lastTickTime) / 1000, 0.05);
     lastTickTime = now;
 
+    const activePlayersArray = Object.values(players).filter(p => !p.isSpectating);
+    NET_TICK = activePlayersArray ? NET_TICK_ACTIVE : NET_TICK_IDLE;
+
     if (activePlayersArray.length === 0) {
-        if (matchPhase !== 'ended') {
-            console.log("No active players left. Resetting match...");
-            matchPhase = 'ended';
+        if (!resetPending && matchPhase === 'running') {
+            console.log("No active players left. Match will reset when someone joins...");
             resetPending = true;
-            maybeResetMatch();
+        }
+        if (matchTimer <= 0 && matchPhase !== 'ended') {
+            matchPhase = 'ended';
+            console.log("Match ended due to timer.");
         }
     } else {
+        resetPending = false;
+
+        if (matchPhase === 'ended') {
+            maybeResetMatch(); 
+        }
+
         NET_TICK = NET_TICK_ACTIVE;
         if (matchPhase === "running") {
             matchTimer = Math.max(0, matchTimer - delta);
         }
-    }
-
-    if (matchTimer <= 0 && matchPhase === 'running') {
-        matchPhase = 'ended';
-        resetPending = true;
     }
 
     Object.values(players).forEach(p => {
@@ -834,7 +747,7 @@ setInterval(() => {
     if (botAccumulator >= 1 / 30) {
         Object.values(bots).forEach(b => {
             if (b.retired) return;
-            if (b.id === 'bot_eliminator') b.updateAdvanced(players,Object.values.forEach(bullets));
+            if (b.id === 'bot_eliminator') b.updateAdvanced(players);
             else b.update(players);
         });
         botAccumulator = 0;
@@ -963,15 +876,17 @@ setInterval(() => {
                                 const respawn = getBotSafeSpawn();
                                 Object.assign(target, {hp: 100,x: respawn.x,y: respawn.y,spawnTime: Date.now(),justDied:false});
                             } else {
-                                target.retired = true;
-                                if (target.id === 'bot_eliminator') {
-                                    io.emit('EliminatorRetired','The Eliminator has fallen…');
-                                } else if (target.id === 'bot_rob') {
-                                    io.emit('RobRetired','Rob has left the arena.');
+                                target.retired=true;
+                                if (!target.retireAnnounced) {
+                                    target.retireAnnounced = true;
+                                    if (target.id === 'bot_eliminator') {
+                                        io.emit('EliminatorRetired', 'The Eliminator has fallen…');
+                                    } else if (target.id === 'bot_rob') {
+                                        io.emit('RobRetired', 'Rob has left the arena.');
+                                    }
                                 }
                             }
                         }
-                        
                     }
                 }
             }
