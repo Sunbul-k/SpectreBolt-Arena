@@ -193,31 +193,34 @@ function shouldRespawnBot(botId) {
     return true;
 }
 
-let specialsSpawned = false;
+let specialsSpawned = {
+    rob: false,
+    eliminator: false
+};
 
 function spawnSpecialBots() {
-    if (specialsSpawned) return;
-    if (bots['bot_rob']) delete bots['bot_rob'];
-    if (bots['bot_eliminator']) delete bots['bot_eliminator'];
-    specialsSpawned = true;
-
-    setTimeout(() => {
-        if (Math.random() < 0.75) {
+    setTimeout(()=>{
+        if (!specialsSpawned.rob && !bots['bot_rob'] && Math.random() < 0.75) {
+            specialsSpawned.rob = true;
             const rob = new Bot('bot_rob', 'Rob', '#4A90E2', BASE_SPEED, 950);
             rob.damageTakenMultiplier = 0.75;
             rob.hp = 100;
             bots['bot_rob'] = rob;
-            io.emit('RobSpawned', {id: 'bot_rob', name: 'Rob',timestamp: Date.now()});
+
+            io.emit('RobSpawned', {id: 'bot_rob', name: 'Rob', timestamp: Date.now()});
         }
 
-        if (Math.random() < 0.25) {
+        if (!specialsSpawned.eliminator && !bots['bot_eliminator'] && Math.random() < 0.25) {
+            specialsSpawned.eliminator = true;
+
             const elim = new Bot('bot_eliminator', 'Eliminator', '#E24A4A', 3.9, 1100);
             elim.isRetreating = false;
             elim.damageTakenMultiplier = 0.4;
             bots['bot_eliminator'] = elim;
-            io.emit('EliminatorSpawned', {id: 'bot_eliminator',name: 'Eliminator',timestamp: Date.now()});
+
+            io.emit('EliminatorSpawned', {id: 'bot_eliminator', name: 'Eliminator', timestamp: Date.now()});
         }
-    }, 5000);
+    },5000);
 }
 
 app.set('trust proxy', true);
@@ -282,7 +285,8 @@ function resetMatch() {
 
     walls = generateWalls(12);
 
-    specialsSpawned = false;
+    specialsSpawned.eliminator = false;
+    specialsSpawned.rob=false;
     spawnSpecialBots();
     
     Object.values(players).forEach(p => {
@@ -671,7 +675,7 @@ io.on('connection', socket => {
         const p = players[socket.id];
         if (p?.clientId && clientIdMap[p.clientId] === socket.id) {
             delete clientIdMap[p.clientId];
-            clientDisconnectCooldown=Date.now();
+            clientDisconnectCooldown[p.clientId]=Date.now();
         }
 
         delete players[socket.id];
