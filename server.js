@@ -475,14 +475,21 @@ class Bot {
                 attempts++;
             }
 
-            this.x = nx;
-            this.y = ny;
+            if (!collidesWithWall(nx, ny, ENTITY_RADIUS)) {
+                this.x = nx;
+                this.y = ny;
+            } else {
+                this.angle += Math.PI / 2;
+            }
 
             if (this.hp >= 70) {
                 this.isRetreating = false;
                 this.hasFiredWhileRetreating = false;
             }
 
+            this.x = Math.max(ENTITY_RADIUS, Math.min(MAP_SIZE - ENTITY_RADIUS, this.x));
+            this.y = Math.max(ENTITY_RADIUS, Math.min(MAP_SIZE - ENTITY_RADIUS, this.y));
+           
             return;
         }
 
@@ -501,6 +508,9 @@ class Bot {
             this.wanderAngle += Math.PI;
         }
         this.fireAtPlayers(players);
+        this.x = Math.max(ENTITY_RADIUS, Math.min(MAP_SIZE - ENTITY_RADIUS, this.x));
+        this.y = Math.max(ENTITY_RADIUS, Math.min(MAP_SIZE - ENTITY_RADIUS, this.y));
+
     }
 }
 
@@ -867,11 +877,11 @@ setInterval(() => {
             if (!isLeaderboardEligible(p)) continue;
             slimPlayers[id] = {id,x: p.x,y: p.y,hp: p.hp,angle: p.angle,isSpectating: p.isSpectating,forcedSpectator: p.forcedSpectator,spawnProtected: Date.now() < p.spawnProtectedUntil,stamina: p.stamina,score:p.score,lives:p.lives,color:p.color,name:p.name};
         }
+
         const slimBots = {};
         for (const [id, b] of Object.entries(bots)) {
             slimBots[id] = {id: b.id,x: b.x,y: b.y,hp: b.hp,score: b.score,angle: b.angle,name: b.name,color: b.color,retired: !!b.retired};
         }
-
 
         const slimBullets = {};
         for (const [id, b] of Object.entries(bullets)) {
