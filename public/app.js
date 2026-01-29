@@ -186,7 +186,7 @@ window.addEventListener('beforeunload', () => {
 
 canvas.addEventListener('click', () => {
     if (!players[myId]) {
-        window.open('https://github.com/Sunbul-k/Spectrebolt-Arena/discussions/','_blank');
+        location.reload();
     }
 });
 
@@ -775,7 +775,7 @@ function draw(){
         ctx.fillRect(0,0,canvas.width,canvas.height);
         ctx.fillStyle = "#f44";
         ctx.font = "20px monospace";
-        drawCenteredText(ctx, isJoining ? "Joining game..." : "Black screen?\nTap here to report a bug ", 20);
+        drawCenteredText(ctx, isJoining ? "Joining game...\nTap here to refresh." : "Black screen?\nTap here to refresh. ", 20);
         return;
     }
 
