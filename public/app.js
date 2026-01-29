@@ -1,5 +1,5 @@
 /*
- * Spectrebolt Arena - Multiplayer 2D Shooter Game Client-Side
+ * Spectrebolt Arena - 2D Multiplayer Shooter Game Client-Side
  * Copyright (C) 2026 Saif Kayyali
  * GNU GPLv3
  */

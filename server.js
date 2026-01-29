@@ -1,5 +1,5 @@
 /*
- * Spectrebolt Arena - Multiplayer 2D Shooter Game Server-Side
+ * Spectrebolt Arena - 2D Multiplayer Shooter Game Server-Side
  * Copyright (C) 2026 Saif Kayyali
  * GNU GPLv3
  */
@@ -882,6 +882,10 @@ setInterval(() => {
         lastNetSend = Date.now();
     }
 }, TICK_RATE);
+
+app.get('/health', (req, res) => {
+  res.status(200).send('ok');
+});
 
 server.listen(PORT, '0.0.0.0', () => { 
     console.log(`Spectrebolt Arena Server Active on Port ${PORT}`); 
