@@ -61,7 +61,6 @@ function isHandheldLike() {
     return (coarsePointer &&!finePointer &&hoverNone &&(smallScreen || !hasKeyboard));
 }
 
-
 function isHandheldLikeCached() {
     if (cachedHandheld !== null) return cachedHandheld;
     cachedHandheld = isHandheldLike();
@@ -106,7 +105,6 @@ function updateUXWarnings() {
     }
 }
 
-
 window.addEventListener('DOMContentLoaded', updateUXWarnings);
 window.addEventListener('resize', updateUXWarnings);
 window.addEventListener('orientationchange', updateUXWarnings);
@@ -147,17 +145,12 @@ function resizeCanvas() {
 
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
-window.addEventListener('orientationchange', () => {
-    setTimeout(resizeCanvas, 300);
-});
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 300));
 
-if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', resizeCanvas);
-}
+if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeCanvas);
 
-window.addEventListener('load', () => {
-    resizeCanvas();
-});
+
+window.addEventListener('load', () => resizeCanvas());
 
 let isJoining = false;
         
@@ -188,11 +181,7 @@ window.addEventListener('beforeunload', () => {
     bullets = {};
 });
 
-const tryReload = () => {
-    if (!players[myId]) {
-        location.reload();
-    }
-};
+const tryReload = () => {if (!players[myId]) location.reload();};
 
 canvas.addEventListener('click', tryReload);
 canvas.addEventListener('touchstart', tryReload, { passive: true });
@@ -487,6 +476,7 @@ socket.on('state', s => {
             name: prev.name ?? p.name
         };
     });
+
     Object.keys(players).forEach(id => {
         if (!s.players[id]) delete players[id];
     });
@@ -596,7 +586,6 @@ socket.on('disconnect', (reason) => {
     }
 });
 
-
 document.getElementById('rematchBtn').onclick = () => {
     if (isRematching) return;
     isRematching = true;
@@ -604,7 +593,6 @@ document.getElementById('rematchBtn').onclick = () => {
     socket.emit('rematch');
     document.getElementById('rematchBtn').disabled=true;
 };
-
 
 setInterval(() => {
     if (isGameOverLocked) return;
@@ -797,7 +785,6 @@ function drawCenteredText(ctx, text, yOffset = 0, lineHeight = 26) {
 
     ctx.restore();
 }
-
 
 function draw(){
     ctx.setTransform(1, 0, 0, 1, 0, 0);

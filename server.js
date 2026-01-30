@@ -42,12 +42,18 @@ const NET_TICK_ACTIVE = 1000 / 20;
 const clientIdMap = {};
 const clientDisconnectCooldown = {};
 
-const BANNED_WORDS = ['fuck','ass','badass','sex','seg','penis','vagin','anal','anus','virgin','suck','blow','tit','oral','rim','69','zinji','breast','brest','zib','uterus','dumbass','boob','testi','balls','nut','egg','shit', 'nigg', 'bitch', 'slut', 'nazi', 'hitler', 'milf', 'cunt', 'retard', 'dick', 'diddy', 'epstein', 'diddl', 'rape', 'pedo', 'rapis','porn','mussolini','musolini','stalin','trump','cock', 'israel','genocide','homicide','suicide','genocidal','suicidal','homicidal','arson','hog','pussy','pussi','twin','9/11','kill','murder','mom','dad','mother','father'];
+// Note: Some bans are intentionally broad to prevent common abuse patterns:
+// - mom/dad/mother/father/sister/brother: harassment & sexual taunts
+// - twin: Twin Towers references
+// - hog: hogtie abuse
+// - nigg: we know why
+// - didd: diddy, diddle, diddler, etc.
+
+const BANNED_WORDS = ['fuck','ass','badass','sex','seg','penis','vagin','anal','anus','virgin','suck','blow','tit','oral','rim','69','zinji','zingi','breast','brest','zib','uterus','dumbass','boob','testi','balls','nut','egg','shit', 'nigg', 'bitch', 'slut', 'nazi', 'hitler', 'milf', 'cunt', 'retard', 'dick', 'didd', 'epstein', 'rape', 'pedo', 'rapis','porn','mussolini','musolini','stalin','trump','cock', 'israel','genocide','homicide','suicide','genocidal','suicidal','homicidal','arson','hog','pussy','pussi','twin','9/11','kill','murder','mom','dad','mother','father','sister','brother'];
 const WORD_ONLY_BANS = ['ass'];
-const SUBSTRING_BANS = BANNED_WORDS.filter(w => w !== 'ass' && w !=='badass' && w!=='dumbass');
+const SUBSTRING_BANS = BANNED_WORDS.filter(w => w !== 'ass');
 
 const RESERVED=['bobby','rob','eliminator','spectrebolt','admin','server','saifkayyali3','sunbul-k','you','player','skayyali3']
-
 
 const DOMAIN_REGEX = /\b[a-z0-9-]{2,}\.(com|net|org|io|gg|dev|app|xyz|tv|me|co|info|site|online)\b/i;
 const URL_SCHEME_REGEX = /(https?:\/\/|www\.)/i;
@@ -67,7 +73,6 @@ let NET_TICK = NET_TICK_IDLE;
 let matchPhase = 'running'; 
 let lastFirePacket = {};
 
-
 function validateName(name) {
     if (typeof name !== 'string') return false;
     if (!name.trim()) return false;
@@ -85,21 +90,19 @@ function validateName(name) {
         '5': 's','7': 't','8': 'b',
         '@': 'a','$': 's','!': 'i',
         '-': '','_': '','.': '',
-        '9': 'g','2': 'z','+':'t'
+        '9': 'g','2': 'z','+':'t',
+        '6':'g','|':'i'
     };
 
     const baseNormalized = lower.split('').map(c => leetMap[c] ?? c).join('').replace(/[^a-z]/g, '');
-
     const collapsed = baseNormalized.replace(/(.)\1+/g, '$1');
-    const stripped = baseNormalized.replace(/[0-9]/g, '');
 
-    if (RESERVED.includes(lower) ||RESERVED.includes(baseNormalized) ||RESERVED.includes(collapsed) ||RESERVED.includes(stripped)) return false;
+    if (RESERVED.includes(lower) ||RESERVED.includes(baseNormalized) ||RESERVED.includes(collapsed)) return false;
     if (SUBSTRING_BANS.some(w => baseNormalized.includes(w) || collapsed.includes(w))) return false;
-    if (WORD_ONLY_BANS.some(w => new RegExp(`\\b${w}\\b`).test(baseNormalized))) return false;
+    if (WORD_ONLY_BANS.includes(baseNormalized)) return false;
 
     return true;
 }
-
 
 function rectsIntersect(r1, r2, padding = 0) {
     return (r1.x < r2.x + r2.w + padding && r1.x + r1.w + padding > r2.x && r1.y < r2.y + r2.h + padding && r1.y + r1.h + padding > r2.y);
@@ -844,6 +847,7 @@ setInterval(() => {
                                     lastRegenTime: Date.now(),
                                     justDied:false
                                 });
+
                                 io.to(target.id).emit('respawned', {
                                     x: target.x,
                                     y: target.y
