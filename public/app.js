@@ -16,6 +16,7 @@ const BASE_VIEW_SIZE = 900;
 const leaderboardScroll= document.getElementById('leaderboardScroll');
 const IDLE_TIMEOUT = 60_000;
 
+let isJoining = false;
 let idleDisconnectReason = null;
 let idleDisconnectTimer = null;
 let isRematching = false;
@@ -105,18 +106,6 @@ function updateUXWarnings() {
     }
 }
 
-window.addEventListener('DOMContentLoaded', updateUXWarnings);
-window.addEventListener('resize', updateUXWarnings);
-window.addEventListener('orientationchange', updateUXWarnings);
-
-window.addEventListener('resize', () => cachedHandheld = null);
-
-const standaloneMQ = window.matchMedia('(display-mode: standalone)');
-standaloneMQ.addEventListener('change', () => {
-    cachedStandalone = null;
-    updateUXWarnings();
-});
-
 async function requestFullScreen() {
     const el = document.documentElement;
     try {
@@ -144,46 +133,6 @@ function resizeCanvas() {
 }
 
 resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
-window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 300));
-
-if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeCanvas);
-
-window.addEventListener('load', () => resizeCanvas());
-
-let isJoining = false;
-        
-window.addEventListener('DOMContentLoaded', () => {
-    const startBtn = document.getElementById('startBtn');
-    if (!startBtn) return console.error("Start button not found!");
-
-    startBtn.onclick = async () => {
-        await requestFullScreen();
-        const name = document.getElementById('nameInput').value;
-        startBtn.disabled = true;
-        let clientId = localStorage.getItem('clientId');
-        if (!clientId) {
-            clientId = 'c_' + Math.random().toString(36).slice(2,10);
-            localStorage.setItem('clientId', clientId);
-        }
-        isJoining=true;
-        socket.emit('joinGame', { name: name || "Sniper", clientId });
-        document.getElementById('nameScreen').style.display = 'none';
-    };
-});
-
-window.addEventListener('beforeunload', () => {
-    trySavePersonalBest();
-    myId = null;
-    players = {};
-    bots = {};
-    bullets = {};
-});
-
-const tryReload = () => {if (!players[myId]) location.reload();};
-
-canvas.addEventListener('click', tryReload);
-canvas.addEventListener('touchstart', tryReload, { passive: true });
 
 function clampLeaderboardToTop5() {
     const scroll = document.getElementById('leaderboardScroll');
@@ -199,136 +148,130 @@ function clampLeaderboardToTop5() {
     scroll.style.overflowY = rows.length > maxVisible ? 'auto' : 'hidden';
 }
 
-window.addEventListener('resize', clampLeaderboardToTop5);
+function setupJoystick(base, knob, joyObj, onMove) { 
+    if (!base || !knob) return; 
+    base.addEventListener('touchstart', e => { 
+        const t = e.changedTouches[0]; 
+        joyObj.active = true; 
+        joyObj.id = t.identifier; 
+        joyObj.startX = t.clientX || 0; 
+        joyObj.startY = t.clientY || 0; 
+        knob.style.transform = "translate(0,0)"; 
+        e.preventDefault(); 
+    }, { passive: false }); 
 
-window.addEventListener('DOMContentLoaded', ()=>{
+    base.addEventListener('touchmove', e => { 
+        for (const t of e.changedTouches) { 
+            if (t.identifier !== joyObj.id) continue; 
+            let dx = t.clientX - (joyObj.startX || 0); 
+            let dy = t.clientY - (joyObj.startY || 0); 
+            const dist = Math.hypot(dx, dy); 
+            const clamped = Math.min(dist, MAX_DIST); 
+            if (dist < DEADZONE) { 
+                joyObj.x = 0; 
+                joyObj.y = 0; 
+                knob.style.transform = "translate(0,0)"; return; 
+            } 
+            const angle = Math.atan2(dy, dx); 
+            joyObj.x = Math.cos(angle) * (clamped / MAX_DIST); 
+            joyObj.y = Math.sin(angle) * (clamped / MAX_DIST); 
+            knob.style.transform = `translate(${joyObj.x * MAX_DIST}px, ${joyObj.y * MAX_DIST}px)`;
+            if (onMove) onMove(joyObj, angle); 
+            e.preventDefault(); } 
+    }, { passive: false }); 
+
+    base.addEventListener('touchend', e => { 
+        for (const t of e.changedTouches) { 
+            if (t.identifier !== joyObj.id) continue; 
+            joyObj.active = false; 
+            joyObj.id = null; 
+            joyObj.x = 0; 
+            joyObj.y = 0; 
+            knob.style.transform = "translate(0,0)"; 
+        } 
+    }, { passive: false }); 
+}
+
+function onResize() {
+    cachedHandheld = null;
+    cachedStandalone = null;
+
+    resizeCanvas();
+    updateUXWarnings();
+    clampLeaderboardToTop5();
+}
+
+let resizeTimeout;
+function handleResizeDebounced() {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(onResize, 100);
+}
+
+window.addEventListener('resize', handleResizeDebounced);
+window.addEventListener('orientationchange', handleResizeDebounced);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', handleResizeDebounced);
+
+const standaloneMQ = window.matchMedia('(display-mode: standalone)');
+standaloneMQ.addEventListener('change', handleResizeDebounced);
+
+window.addEventListener('load', onResize);
+
+window.addEventListener('beforeunload', () => {
+    trySavePersonalBest();
+    myId = null;
+    players = {};
+    bots = {};
+    bullets = {};
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+    const startBtn = document.getElementById('startBtn');
+    if (startBtn) {
+        startBtn.onclick = async () => {
+            await requestFullScreen();
+            const name = document.getElementById('nameInput').value;
+            startBtn.disabled = true;
+
+            let clientId = localStorage.getItem('clientId');
+            if (!clientId) {
+                clientId = 'c_' + Math.random().toString(36).slice(2,10);
+                localStorage.setItem('clientId', clientId);
+            }
+
+            isJoining = true;
+            socket.emit('joinGame', { name: name || "Sniper", clientId });
+            document.getElementById('nameScreen').style.display = 'none';
+        };
+    }
+
+    updateUXWarnings();
+
     const joyBase = document.getElementById('moveJoystick');
     const joyKnob = document.getElementById('moveKnob');
-
-    joyBase.addEventListener('touchstart', e => {
-        const t = e.changedTouches[0];
-        joy.active = true;
-        joy.id = t.identifier;
-
-        joy.startX = t.clientX;
-        joy.startY = t.clientY;
-
-        joyKnob.style.transform = "translate(0,0)";
-        e.preventDefault();
-    }, { passive: false });
-
-    joyBase.addEventListener('touchmove', e => {
-        for (const t of e.changedTouches) {
-            if (t.identifier !== joy.id) continue;
-
-            let dx = t.clientX - joy.startX;
-            let dy = t.clientY - joy.startY;
-
-            const dist = Math.hypot(dx, dy);
-            const clamped = Math.min(dist, MAX_DIST);
-            const angle = Math.atan2(dy, dx);
-
-            if (dist < DEADZONE) {
-                joy.x = 0;
-                joy.y = 0;
-                joyKnob.style.transform = "translate(0,0)";
-                return;
-            }
-            joy.x = Math.cos(angle) * (clamped / MAX_DIST);
-            joy.y = Math.sin(angle) * Math.min(1, clamped / MAX_DIST);
-
-            joyKnob.style.transform =`translate(${joy.x * MAX_DIST}px, ${joy.y * MAX_DIST}px)`;
-
-            e.preventDefault();
-        }
-    }, { passive: false });
-
-    joyBase.addEventListener('touchend', e => {
-        for (const t of e.changedTouches) {
-            if (t.identifier !== joy.id) continue;
-
-            joy.active = false;
-            joy.id = null;
-            joy.x = 0;
-            joy.y = 0;
-
-            joyKnob.style.transform = "translate(0,0)";
-        }
-    }, { passive: false });
-
     const shootBase = document.getElementById('shootJoystick');
     const shootKnob = document.getElementById('shootKnob');
 
-    shootBase.addEventListener('touchstart', e => {
-        const t = e.changedTouches[0];
-        shootJoy.active = true;
-        shootJoy.id = t.identifier;
-        shootKnob.style.transform = "translate(0,0)";
-        e.preventDefault();
-    }, { passive: false });
+    if (joyBase && joyKnob) setupJoystick(joyBase, joyKnob, joy, null);
+    if (shootBase && shootKnob) setupJoystick(shootBase, shootKnob, shootJoy, (joyObj) => {
+        mouseAngle = Math.atan2(joyObj.y, joyObj.x);
+    });
 
-    shootBase.addEventListener('touchmove', e => {
-        for (const t of e.changedTouches) {
-            if (t.identifier !== shootJoy.id) continue;
-
-            const rect = shootBase.getBoundingClientRect();
-            const cx = rect.left + rect.width / 2;
-            const cy = rect.top + rect.height / 2;
-
-            const dx = t.clientX - cx;
-            const dy = t.clientY - cy;
-
-            const dist = Math.hypot(dx, dy);
-            const clamped = Math.min(dist, MAX_DIST);
-
-            if (dist < DEADZONE) {
-                shootJoy.x = 0;
-                shootJoy.y = 0;
-                shootKnob.style.transform = "translate(0,0)";
-                return;
-            }
-
-            shootJoy.x = dx / dist;
-            shootJoy.y = dy / dist;
-
-            mouseAngle = Math.atan2(shootJoy.y, shootJoy.x);
-
-            shootKnob.style.transform =`translate(${shootJoy.x * clamped}px, ${shootJoy.y * clamped}px)`;
-
-            e.preventDefault();
-        }
-    }, { passive: false });
-
-    shootBase.addEventListener('touchend', e => {
-        for (const t of e.changedTouches) {
-            if (t.identifier !== shootJoy.id) continue;
-
-            shootJoy.active = false;
-            shootJoy.id = null;
-            shootJoy.x = 0;
-            shootJoy.y = 0;
-            shootKnob.style.transform = "translate(0,0)";
-        }
-    }, { passive: false });
-
-    document.getElementById('sprintBtn').addEventListener('touchstart', (e) => { e.preventDefault(); isMobileSprinting = true; });
-    document.getElementById('sprintBtn').addEventListener('touchend', (e) => { e.preventDefault(); isMobileSprinting = false; });            
+    const sprintBtn = document.getElementById('sprintBtn');
+    if (sprintBtn) {
+        sprintBtn.addEventListener('touchstart', e => { e.preventDefault(); isMobileSprinting = true; });
+        sprintBtn.addEventListener('touchend', e => { e.preventDefault(); isMobileSprinting = false; });
+    }
 
     window.addEventListener('keydown', e => {
-        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight","Space"].includes(e.key)) {
-            e.preventDefault();
-        }
-
+        const preventKeys = ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"];
+        if (preventKeys.includes(e.key)) e.preventDefault();
         keys[e.code] = true;
-
-        if (e.code === 'Space') {
-            spaceHeld = true;
-        }
+        spaceHeld = keys['Space'] || false;
     });
 
     window.addEventListener('keyup', e => {
         keys[e.code] = false;
-        if (e.code === 'Space') spaceHeld = false;
+        spaceHeld = keys['Space'] || false;
     });
 
     window.addEventListener('mousemove', e => {
@@ -343,7 +286,14 @@ window.addEventListener('DOMContentLoaded', ()=>{
 
         mouseAngle = Math.atan2(my - cy, mx - cx);
     });
+
+    clampLeaderboardToTop5();
 });
+
+const tryReload = () => {if (!players[myId]) location.reload();};
+
+canvas.addEventListener('click', tryReload);
+canvas.addEventListener('touchstart', tryReload, { passive: true });
 
 document.addEventListener('visibilitychange', () => {
     const nameScreen = document.getElementById('nameScreen');
@@ -593,69 +543,36 @@ document.getElementById('rematchBtn').onclick = () => {
 setInterval(() => {
     if (isGameOverLocked) return;
 
-    if (!shootJoy.active) return;
-
     const me = players[myId];
     if (!me || me.isSpectating) return;
 
     const now = performance.now();
-    if (now - lastShootTime < SHOOT_INTERVAL) return;
 
-    if (shootJoy.x === 0 && shootJoy.y === 0) return;
+    if (shootJoy.active && (now - lastShootTime >= SHOOT_INTERVAL) && (shootJoy.x !== 0 || shootJoy.y !== 0)) {
+        lastShootTime = now;
+        mouseAngle = Math.atan2(shootJoy.y, shootJoy.x);
+        socket.emit('fire', { angle: mouseAngle });
+    }
 
-    lastShootTime = now;
-
-    const angle = Math.atan2(shootJoy.y, shootJoy.x);
-    mouseAngle = angle;
-
-    socket.emit('fire', { angle });
-}, 1000 / 60);
-setInterval(() => {
-    if (isGameOverLocked) return;
-
-    if (!spaceHeld) return;
-    const me = players[myId];
-    if (!me || me.isSpectating) return;
-
-    const now = performance.now();
-    if (now - lastSpaceShot < SHOOT_INTERVAL) return;
-
-    lastSpaceShot = now;
-    socket.emit('fire', { angle: mouseAngle });
-}, 1000 / 60);
-setInterval(() => {
-    if (isGameOverLocked) return;
-
-    const me = players[myId];
-    if (!me || matchTimer <= 0) return;
+    if (spaceHeld && (now - lastSpaceShot >= SHOOT_INTERVAL)) {
+        lastSpaceShot = now;
+        socket.emit('fire', { angle: mouseAngle });
+    }
 
     const isSprinting = keys['ShiftLeft'] || keys['ShiftRight'] || isMobileSprinting;
-    let dx = 0, dy = 0;
+    let dx = (keys['KeyD'] || keys['ArrowRight'] ? 1 : 0) - (keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0);
+    let dy = (keys['KeyS'] || keys['ArrowDown'] ? 1 : 0) - (keys['KeyW'] || keys['ArrowUp'] ? 1 : 0);
 
-    if (keys['KeyW'] || keys['ArrowUp']) dy -= 1;
-    if (keys['KeyS'] || keys['ArrowDown']) dy += 1;
-    if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
-    if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
+    if (joy.active) { dx = joy.x; dy = joy.y; }
+    if (me.isSpectating) { dx = joy.x || dx; dy = joy.y || dy; }
 
-    if (joy.active) {
-        dx = joy.x;
-        dy = joy.y;
-    }
-    if (me.isSpectating) {
-        dx = joy.x || dx;
-        dy = joy.y || dy;
+    let angle = mouseAngle;
+    if (shootJoy.active && (shootJoy.x !== 0 || shootJoy.y !== 0)) {
+        angle = Math.atan2(shootJoy.y, shootJoy.x);
     }
 
-    let aimingAngle = mouseAngle;
-
-        if (shootJoy.active && (shootJoy.x !== 0 || shootJoy.y !== 0)) {
-            aimingAngle = Math.atan2(shootJoy.y, shootJoy.x);
-        }
-
-    const quantAngle = Math.round(aimingAngle * 1000) / 1000;
-
-    const input = { moveX:dx, moveY:dy, sprint:isSprinting, angle: quantAngle };
-    if (me.isSpectating ||!lastInput ||input.moveX !== lastInput.moveX ||input.moveY !== lastInput.moveY ||input.sprint !== lastInput.sprint ||input.angle !== lastInput.angle) {
+    const input = { moveX: dx, moveY: dy, sprint: isSprinting, angle: Math.round(angle*1000)/1000 };
+    if (!lastInput || input.moveX !== lastInput.moveX || input.moveY !== lastInput.moveY || input.sprint !== lastInput.sprint || input.angle !== lastInput.angle) {
         socket.emit('input', input);
         lastInput = input;
     }
