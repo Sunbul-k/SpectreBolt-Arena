@@ -710,6 +710,10 @@ setInterval(() => {
         }
     }
 
+    if (matchTimer <= 0 && matchPhase === 'running') {
+        matchPhase = 'ended';
+    }
+
     Object.values(players).forEach(p => {
         if (p.waitingForRematch) return;
         if (!p.isSpectating && Date.now() - p.lastRegenTime > 3000) {
@@ -758,6 +762,7 @@ setInterval(() => {
         }
         p.angle = p.input.angle;
     });
+
     botAccumulator += delta;
     if (botAccumulator >= 1 / 30) {
         Object.values(bots).forEach(b => {
