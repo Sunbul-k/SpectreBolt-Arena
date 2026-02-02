@@ -478,6 +478,7 @@ socket.on('RobSpawned', () => {
 socket.on('EliminatorSpawned', () => {
     const box = document.getElementById('eliminatorNotice');
     const msg = document.createElement('div');
+    
     msg.className = 'elim-msg';
     msg.textContent = 'THE ELIMINATOR HAS ENTERED THE ARENA';
 
@@ -487,6 +488,7 @@ socket.on('EliminatorSpawned', () => {
 socket.on('RobRetired', () => {
     const box = document.getElementById('robNotice');
     const msg = document.createElement('div');
+
     msg.className = 'rob-msg';
     msg.textContent = 'Rob has left the arena.';
 
@@ -496,22 +498,21 @@ socket.on('RobRetired', () => {
 socket.on('EliminatorRetired', () => {
     const box = document.getElementById('eliminatorNotice');
     const msg = document.createElement('div');
+
     msg.className = 'elim-msg';
     msg.textContent = 'The Eliminator has fallen.. with no return.';
+
     box.appendChild(msg);
     setTimeout(() => msg.remove(), 4000);
 });
-socket.on('mapUpdate', d => {    mapSize = d.mapSize;    walls = d.walls;});
+socket.on('mapUpdate', d => {mapSize = d.mapSize; walls = d.walls;});
 socket.on('errorMsg', (msg) => { 
     alert(msg);
 
     const nameScreen = document.getElementById('nameScreen');
     const startBtn = document.getElementById('startBtn');
 
-    if (typeof msg === 'string' && msg.includes('already in the game')) {
-        window.location.reload();
-        return;
-    }
+    window.location.reload();
 
     if (nameScreen) nameScreen.style.display = 'flex';
     if (startBtn) startBtn.disabled = false;
