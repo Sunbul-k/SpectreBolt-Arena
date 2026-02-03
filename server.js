@@ -62,6 +62,7 @@ const BULLET_RADIUS = 4;
 const NET_TICK_IDLE = 1000 / 10;
 const NET_TICK_ACTIVE = 1000 / 15;
 const JOIN_LIMITS = new Map();
+const personalBests = new Map();
 
 // Note: Some bans are intentionally broad to prevent common abuse patterns:
 // - mom/dad/mother/father/sister/brother/baby: harassment & sexual taunts
@@ -70,7 +71,7 @@ const JOIN_LIMITS = new Map();
 // - nigg: we know why
 // - didd: diddy, diddle, diddler, etc.
 
-const BANNED_WORDS = ['fuck','ass','asshole','douchebag','twat','groom','badass','sex','seg','penis','vagin','molest','anal','kus','sharmoot','khara','ukht','akh','abo','umm','anus','virgin','suck','blow','tit','oral','rim','69','zinji','breast','brest','zib','uterus','dumbass','boob','testi','balls','nut','egg','shit', 'nigg', 'bitch', 'slut', 'nazi', 'hitler', 'milf', 'cunt', 'retard', 'dick', 'didd', 'epstein', 'rape', 'pedo', 'rapis','porn','mussolini','musolini','stalin','trump','cock', 'israel','genocide','homicide','suicide','genocidal','suicidal','homicidal','hog','pussy','twin','9/11','murder','mom','dad','mother','father','sister','brother','goy','faggot','fagot','asshole','piss','negro','bastard','nipp','vulva','sperm','slave','bend','racial','racist','prostitute','prick','orgas','orgie','orgi','orge','mastur','masterb','jackass','horny','handjob','cum','finger','fetish','ejac','devil','demon','crotch','whore','hoe','clit','cocaine','coke','drug','dealer','weed','butt','bang','child','bond','meat','babe','baby'];
+const BANNED_WORDS = ['fuck','teez','ass','3ars','asshole','douchebag','twat','groom','badass','sex','seg','penis','vagin','molest','anal','kus','sharmoot','khara','ukht','akh','abo','umm','anus','virgin','suck','blow','tit','oral','rim','69','zinji','breast','brest','zib','uterus','dumbass','boob','testi','balls','nut','egg','shit', 'nigg', 'bitch', 'slut', 'nazi', 'hitler', 'milf', 'cunt', 'retard', 'dick', 'didd', 'epstein', 'rape', 'pedo', 'rapis','porn','mussolini','musolini','stalin','trump','cock', 'israel','genocide','homicide','suicide','genocidal','suicidal','homicidal','hog','pussy','twin','9/11','murder','mom','dad','mother','father','sister','brother','goy','faggot','fagot','asshole','piss','negro','bastard','nipp','vulva','sperm','slave','bend','racial','racist','prostitute','prick','orgas','orgie','orgi','orge','mastur','masterb','jackass','horny','handjob','cum','finger','fetish','ejac','devil','demon','crotch','whore','hoe','clit','cocaine','coke','drug','dealer','weed','butt','bang','child','bond','meat','babe','baby'];
 const WORD_ONLY_BANS = ['ass'];
 
 const SAFE_SUBSTRING_BANS = ['boob','baby','mom','dad','tit','nut','egg','ass','twat','akh','abo','umm','anus','oral','rim','uterus','epstein','rape','goy','nipp','orgas','orgie','orgi','orge','hoe','weed','cum',];
@@ -120,7 +121,8 @@ const leetMap = {
     'j':['g'],
     'g':['j'],
     'ch':['sh'],
-    'sh':['ch']
+    'sh':['ch'],
+    "a'a":['3']
 };
 
 function stripVowels(str) {
@@ -173,7 +175,7 @@ function isReservedName(name) {
 }
 
 function isValid(name) {
-    if (!/^[a-z0-9 _.-]{1,10}$/i.test(name)) return false;
+    if (!/^[a-z0-9 _.-]{1,12}$/i.test(name)) return false;
     if (!/[a-z]/i.test(name)) return false;
     if (DOMAIN_REGEX.test(name) || URL_SCHEME_REGEX.test(name)) return false;
     return true;
@@ -298,6 +300,17 @@ function spawnSpecialBots() {
     }, 5000);
 }
 
+function maybeSavePB(p) {
+    if (!p.uuid) return { personalBest: 0, isNew: false };
+
+    const prev = personalBests.get(p.uuid) || 0;
+    if (p.score > prev) {
+        personalBests.set(p.uuid, p.score);
+        return { personalBest: p.score, isNew: true };
+    }
+    return { personalBest: prev, isNew: false };
+}
+
 function isLeaderboardEligible(p) {
     return !p.forcedSpectator;
 }
@@ -306,6 +319,7 @@ function handleSuccessfulJoin(socket, name,forcedSpectator = false, waitingForRe
     const pos = getSafeSpawn();
     players[socket.id] = {
         id: socket.id,
+        uuid:socket.playerUUID,
         name: name,
         x: pos.x, 
         y: pos.y, 
@@ -329,6 +343,9 @@ function handleSuccessfulJoin(socket, name,forcedSpectator = false, waitingForRe
     };
 
     socket.emit('init', { id: socket.id, mapSize: MAP_SIZE, walls, spawnX: pos.x, spawnY: pos.y,name, forcedSpectator, waitingForRematch,color:players[socket.id].color});
+    
+    const pb = personalBests.get(socket.playerUUID) || 0;
+    socket.emit('personalBestUpdated', {personalBest: pb,isNew: false});
 }
 
 function maybeResetMatch() {
@@ -626,12 +643,18 @@ class Bot {
 io.on('connection', socket => {
     socket.on('joinGame', (data) => {
         let rawName = (data.name || "").trim();
-        let name = rawName.slice(0, 10);
+        let name = rawName.slice(0, 12);
         const now = Date.now();
         const lastJoin = JOIN_LIMITS.get(socket.id) || 0;
 
+        const uuid = data?.uuid;
+        if (!uuid || typeof uuid !== 'string') {
+            socket.emit('errorMsg', 'Invalid client identity.');
+            return;
+        }
+
         if (now - lastJoin < 5000) {
-            socket.emit('errorMsg','Calm down on the join requests.');
+            socket.emit('errorMsg','Calm down on the join requests, you nimrod.');
             return;
         } 
 
@@ -723,6 +746,10 @@ io.on('connection', socket => {
     });
     socket.on('disconnect', () => { 
         console.log(`${socket.playerName ?? 'Unknown player'} has left the arena`);
+        const p = players[socket.id];
+        if (p) {
+            maybeSavePB(p);
+        }
 
         const color = players[socket.id]?.color;
 
@@ -798,6 +825,17 @@ setInterval(() => {
         if (matchTimer <= 0 && matchPhase !== 'ended') {
             matchPhase = 'ended';
             console.log("Match ended due to timer.");
+            Object.values(players).forEach(p => {
+                io.to(p.id).emit('finalScore', { score: p.score });
+                const prev = personalBests.get(p.uuid) || 0;
+                if (p.score > prev) {
+                    personalBests.set(p.uuid, p.score);
+                    io.to(p.id).emit('personalBestUpdated', {personalBest: p.score, isNew: true});
+                } else {
+                    io.to(p.id).emit('personalBestUpdated', {personalBest: prev, isNew: false});
+                }
+
+            });
         }
     } else {
         NET_TICK = NET_TICK_ACTIVE;

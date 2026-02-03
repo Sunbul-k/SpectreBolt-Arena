@@ -215,7 +215,6 @@ standaloneMQ.addEventListener('change', handleResizeDebounced);
 window.addEventListener('load', onResize);
 
 window.addEventListener('beforeunload', () => {
-    trySavePersonalBest();
     myId = null;
     players = {};
     bots = {};
@@ -239,7 +238,13 @@ window.addEventListener('DOMContentLoaded', () => {
             startBtn.disabled = true;
 
             isJoining = true;
-            socket.emit('joinGame', { name: name || "Sniper" });
+            let playerUUID = localStorage.getItem("playerUUID");
+            if (!playerUUID) {
+                playerUUID = crypto.randomUUID();
+                localStorage.setItem("playerUUID", playerUUID);
+            }
+            socket.emit('joinGame', { name, uuid: playerUUID });
+
             document.getElementById('nameScreen').style.display = 'none';
         };
     }
@@ -462,7 +467,6 @@ socket.on('state', s => {
     leaderboardScroll.innerHTML = html;
 
     clampLeaderboardToTop5();
-
 });
 socket.on('respawned', (data)=>{ camX = data.x; camY = data.y; });
 socket.on('RobSpawned', () => {
@@ -478,7 +482,7 @@ socket.on('RobSpawned', () => {
 socket.on('EliminatorSpawned', () => {
     const box = document.getElementById('eliminatorNotice');
     const msg = document.createElement('div');
-    
+
     msg.className = 'elim-msg';
     msg.textContent = 'THE ELIMINATOR HAS ENTERED THE ARENA';
 
@@ -506,6 +510,20 @@ socket.on('EliminatorRetired', () => {
     setTimeout(() => msg.remove(), 4000);
 });
 socket.on('mapUpdate', d => {mapSize = d.mapSize; walls = d.walls;});
+socket.on('finalScore', ({ score }) => {
+    if (pbSavedThisMatch) return;
+    pbSavedThisMatch = true;
+});
+socket.on('personalBestUpdated', ({ personalBest: pb, isNew }) => {
+    personalBest = pb;
+    localStorage.setItem("personalBest", pb);
+
+    const el = document.getElementById('personalBestDisplay');
+    if (el) {
+        el.innerText = isNew? `NEW PERSONAL BEST: ${pb}`: `PERSONAL BEST: ${pb}`;
+    }
+});
+
 socket.on('errorMsg', (msg) => { 
     alert(msg);
 
@@ -518,7 +536,6 @@ socket.on('errorMsg', (msg) => {
     if (startBtn) startBtn.disabled = false;
 });
 socket.on('disconnect', (reason) => {
-    trySavePersonalBest();
     console.warn('Socket disconnected:', reason);
     isJoining = false;
 
@@ -666,23 +683,6 @@ function renderWinners() {
     `;
 }
 
-function trySavePersonalBest() {
-    if (pbSavedThisMatch) return;
-
-    const me = players[myId];
-    if (!me) return;
-
-    pbSavedThisMatch = true;
-
-    if (me.score > personalBest) {
-        personalBest = me.score;
-        localStorage.setItem("personalBest", personalBest);
-
-        const personalBestDisplay = document.getElementById('personalBestDisplay');
-        if (personalBestDisplay) personalBestDisplay.innerText = `PERSONAL BEST: ${personalBest}`;
-    }
-}
-
 function drawCenteredText(ctx, text, yOffset = 0, lineHeight = 26) {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -823,7 +823,6 @@ function draw(){
         if (!isGameOverLocked) {
             isGameOverLocked = true;
             gameOverSince = Date.now();
-            trySavePersonalBest();
         }
 
         if (matchTimer <= 0 || activePlayers.length==0) {
