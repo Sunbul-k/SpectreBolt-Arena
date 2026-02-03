@@ -35,7 +35,7 @@ let joy = { active: false, startX: 0, startY: 0, id: null, x:0, y:0 };
 let shootJoy = {active:false, x:0, y:0, id:null}
 let camX=0; let camY=0;
 let moveTouchId = null;
-let personalBest = Number(localStorage.getItem("personalBest") || 0);
+let personalBest = null;
 let lastInput = null;
 let lastShootTime=0;
 let spaceHeld = false;
@@ -230,6 +230,19 @@ document.getElementById('rematchBtn').onclick = () => {
 };
 
 window.addEventListener('DOMContentLoaded', () => {
+    const personalBestDisplay = document.getElementById('personalBestDisplay');
+
+    if (personalBestDisplay) {
+        const storedPb = localStorage.getItem("personalBest");
+        personalBestDisplay.innerText = storedPb !== null ? `PERSONAL BEST: ${storedPb}` : 'PERSONAL BEST: 0';
+    }
+
+    let playerUUID = localStorage.getItem("playerUUID");
+
+    if (playerUUID) {
+        socket.emit('requestPB', { uuid: playerUUID });
+    }
+
     const startBtn = document.getElementById('startBtn');
     if (startBtn) {
         startBtn.onclick = async () => {
@@ -243,6 +256,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 playerUUID = crypto.randomUUID();
                 localStorage.setItem("playerUUID", playerUUID);
             }
+
             socket.emit('joinGame', { name, uuid: playerUUID });
 
             document.getElementById('nameScreen').style.display = 'none';
@@ -293,11 +307,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
 
     clampLeaderboardToTop5();
-
-    const personalBestDisplay = document.getElementById('personalBestDisplay');
-    if (personalBestDisplay) {
-        personalBestDisplay.innerText = `PERSONAL BEST: ${personalBest}`;
-    }
 });
 
 const tryReload = () => {if (!players[myId]) location.reload();};
@@ -514,13 +523,15 @@ socket.on('finalScore', ({ score }) => {
     if (pbSavedThisMatch) return;
     pbSavedThisMatch = true;
 });
-socket.on('personalBestUpdated', ({ personalBest: pb, isNew }) => {
+socket.on('personalBestUpdated', data => {
+    const pb = Number(data?.personalBest) || 0;
     personalBest = pb;
-    localStorage.setItem("personalBest", pb);
-
+    try {
+        localStorage.setItem("personalBest", pb);
+    } catch (e) {}
     const el = document.getElementById('personalBestDisplay');
     if (el) {
-        el.innerText = isNew? `NEW PERSONAL BEST: ${pb}`: `PERSONAL BEST: ${pb}`;
+        el.innerText = `PERSONAL BEST: ${pb}`;
     }
 });
 
