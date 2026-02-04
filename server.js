@@ -73,14 +73,14 @@ const PB_FILE = path.join(__dirname, 'personal_bests.json');
 // - nigg: we know why
 // - didd: diddy, diddle, diddler, etc.
 
-const BANNED_WORDS = ['fuck','teez','imbecile','ass','3ars','asshole','douchebag','twat','groom','badass','sex','seg','penis','vagin','molest','anal','kus','sharmoot','khara','ukht','akh','abo','umm','anus','virgin','suck','blow','tit','oral','rim','69','zinji','breast','brest','zib','uterus','dumbass','boob','testi','balls','nut','egg','shit', 'nigg', 'bitch', 'slut', 'nazi', 'hitler', 'milf', 'cunt', 'retard', 'dick', 'didd', 'epstein', 'rape', 'pedo', 'rapis','porn','mussolini','musolini','stalin','trump','cock', 'israel','genocide','homicide','suicide','genocidal','suicidal','homicidal','hog','pussy','twin','9/11','murder','mom','dad','mother','father','sister','brother','goy','faggot','fagot','asshole','piss','negro','bastard','nipp','vulva','sperm','slave','bend','racial','racist','prostitute','prick','orgas','orgie','orgi','orge','mastur','masterb','jackass','horny','handjob','cum','finger','fetish','ejac','devil','demon','crotch','whore','hoe','clit','cocaine','coke','drug','dealer','weed','butt','bang','child','bond','meat','babe','baby','touch','mutaherish'];
+const BANNED_WORDS = ['fuck','pimp','teez','imbecile','ass','3ars','asshole','douchebag','twat','groom','badass','sex','seg','penis','vagin','molest','anal','kus','sharmoot','khara','ukht','akh','abo','umm','anus','virgin','suck','blow','tit','oral','rim','69','zinji','breast','brest','zib','uterus','dumbass','boob','testi','balls','nut','egg','shit', 'nigg', 'bitch', 'slut', 'nazi', 'hitler', 'milf', 'cunt', 'retard', 'dick', 'didd', 'epstein', 'rape', 'pedo', 'rapis','porn','mussolini','musolini','stalin','trump','cock', 'israel','genocide','homicide','suicide','genocidal','suicidal','homicidal','hog','pussy','twin','9/11','murder','mom','dad','mother','father','sister','brother','goy','faggot','fagot','asshole','piss','negro','bastard','nipp','vulva','sperm','slave','bend','racial','racist','prostitute','prick','orgas','orgie','orgi','orge','mastur','masterb','jackass','horny','handjob','cum','finger','fetish','ejac','devil','demon','crotch','whore','hoe','clit','cocaine','coke','drug','dealer','weed','butt','bang','child','bond','meat','babe','baby','touch','mutaharish','harass'];
 const WORD_ONLY_BANS = ['ass'];
 
 const SAFE_SUBSTRING_BANS = ['boob','baby','mom','dad','tit','nut','egg','ass','twat','akh','abo','umm','anus','oral','rim','uterus','epstein','rape','goy','nipp','orgas','orgie','orgi','orge','hoe','weed','cum',];
 
 const SUBSTRING_BANS = BANNED_WORDS.filter(w => w !== 'ass');
 
-const RESERVED=['bobby','rob','eliminator','spectrebolt','admin','server','saifkayyali3','sunbul-k','you','player','skayyali3','developer'];
+const RESERVED=['bobby','rob','eliminator','spectrebolt','admin','server','saifkayyali3','sunbul-k','you','player','skayyali3','developer','dev'];
 
 const DOMAIN_REGEX = /\b[a-z0-9-]{2,}\.(com|net|org|io|gg|dev|app|xyz|tv|me|co|info|site|online)\b/i;
 const URL_SCHEME_REGEX = /(https?:\/\/|www\.)/i;
@@ -113,7 +113,7 @@ const leetMap = {
     '9': ['g'], 
     '@': ['a'], 
     '$': ['s'], 
-    '!': ['i'], 
+    '!': ['i','l'], 
     '+': ['t'],
     '-': [''], 
     '_': [''], 
@@ -124,7 +124,12 @@ const leetMap = {
     'g':['j'],
     'ch':['sh'],
     'sh':['ch'],
-    "a'a":['3']
+    "a'a":['3'], // Englush for Arabic letter a'yan
+    'a':['e'],
+    'e':['a', 'i'],
+    'u':['o'],
+    'o':['u'],
+    'i':['e'],
 };
 
 function stripVowels(str) {
@@ -133,31 +138,33 @@ function stripVowels(str) {
 
 function containsBannedWord(name) {
     const lower = name.toLowerCase();
-    let variants = [lower];
+    let variants = new Set([lower]);
 
-    for (let key of Object.keys(leetMap)) {
-        let newVariants = [];
-        for (let v of variants) {
+    for (const [key, reps] of Object.entries(leetMap)) {
+        const next = new Set();
+        for (const v of variants) {
+          next.add(v);
             if (v.includes(key)) {
-                for (let rep of leetMap[key]) {
-                    newVariants.push(v.split(key).join(rep));
+                for (const rep of reps) {
+                    next.add(v.split(key).join(rep));
                 }
-            } else {
-                newVariants.push(v);
             }
         }
-        variants = newVariants;
+        variants = next;
+        if (variants.size > 500) break;
     }
 
-    variants.push(lower,...variants.map(v => v.replace(/(.)\1+/g, '$1')));
+    for (const v of Array.from(variants)) {
+        variants.add(v.replace(/(.)\1+/g, '$1'));
+    }
 
-    for (let v of variants) {
-        for (let w of WORD_ONLY_BANS) {
+    for (const v of variants) {
+        for (const w of WORD_ONLY_BANS) {
             const re = new RegExp(`\\b${w}\\b`, 'i');
             if (re.test(v)) return true;
         }
 
-        for (let w of SUBSTRING_BANS) {
+        for (const w of SUBSTRING_BANS) {
             if (SAFE_SUBSTRING_BANS.includes(w)) {
                 if (v.includes(w) || stripVowels(v).includes(stripVowels(w))) return true;
             } else {
@@ -706,7 +713,7 @@ io.on('connection', socket => {
         }
         if (!autogenerated && containsBannedWord(name)) {
             name = "Imbecile" + randomDigits();
-            console.log(`Blocked name: ${rawName}, renamed to ${name}.`);
+            console.log(`Blocked name: "${rawName}", renamed to ${name}.`);
             autogenerated = true;
         }
         if (!isValid(name)) {
